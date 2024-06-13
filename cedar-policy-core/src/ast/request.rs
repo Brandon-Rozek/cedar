@@ -53,7 +53,7 @@ pub struct Request {
 /// or an unknown in the case of partial evaluation
 #[derive(Debug, Clone, Serialize)]
 pub enum EntityUIDEntry {
-    /// A concrete (but perhaps unspecified) EntityUID
+    /// A concrete EntityUID
     Known {
         /// The concrete `EntityUID`
         euid: Arc<EntityUID>,

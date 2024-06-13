@@ -99,17 +99,11 @@ impl TCNode<EntityUID> for ValidatorActionId {
 /// The principals and resources that an action can be applied to.
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct ValidatorApplySpec {
-    /// The principal entity types the action can be applied to. This set may
-    /// be a singleton set containing the unspecified entity type when the
-    /// `principalTypes` list is omitted in the schema. A non-singleton set
-    /// shouldn't contain the unspecified entity type, but (policy) validation
-    /// will give the same success/failure result as when it is the only element
-    /// of the set, perhaps with extra type errors.
+    /// The principal entity types the action can be applied to.
     #[serde(rename = "principalApplySpec")]
     principal_apply_spec: HashSet<EntityType>,
 
-    /// The resource entity types the action can be applied to. See comments on
-    /// `principal_apply_spec` about the unspecified entity type.
+    /// The resource entity types the action can be applied to.
     #[serde(rename = "resourceApplySpec")]
     resource_apply_spec: HashSet<EntityType>,
 }

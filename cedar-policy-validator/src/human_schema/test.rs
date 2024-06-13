@@ -28,7 +28,7 @@ mod demo_tests {
     use smol_str::ToSmolStr;
 
     use crate::{
-        human_schema::{self, ast::PR, err::ToJsonSchemaError},
+        human_schema::{self, ast::PR, err::ToJsonSchemaError, parser::HumanSyntaxParseErrors},
         ActionType, ApplySpec, AttributesOrContext, EntityType, HumanSchemaError,
         NamespaceDefinition, SchemaFragment, SchemaTypeVariant, TypeOfAttribute,
     };
@@ -44,7 +44,13 @@ mod demo_tests {
         let (schema, _) = SchemaFragment::from_str_natural(src).unwrap();
         let foo = schema.0.get(&None).unwrap().actions.get("Foo").unwrap();
         assert_matches!(foo,
-            ActionType { applies_to : Some(ApplySpec { resource_types : Some(resources), principal_types : Some(principals), ..}), .. } => assert!(resources.is_empty() && principals.is_empty())
+            ActionType {
+                applies_to : Some(ApplySpec {
+                    resource_types : resources,
+                    principal_types : principals, ..
+                }),
+                ..
+            } => assert!(resources.is_empty() && principals.is_empty())
         );
     }
 
@@ -53,19 +59,14 @@ mod demo_tests {
         let src = r#"
         action "Foo" appliesTo { context: {} };
         "#;
-        let (schema, _) = SchemaFragment::from_str_natural(src).unwrap();
-        let foo = schema.0.get(&None).unwrap().actions.get("Foo").unwrap();
-        assert_matches!(
-            foo,
-            ActionType {
-                applies_to: Some(ApplySpec {
-                    resource_types: None,
-                    principal_types: None,
-                    ..
-                }),
-                ..
-            }
-        );
+        match SchemaFragment::from_str_natural(src) {
+            Ok(_) => panic!("Should have failed to parse!"),
+            Err(e) => assert_matches!(e,
+                HumanSchemaError::Parsing(err) => assert_matches!(err.inner(),
+                    HumanSyntaxParseErrors::JsonError(errs) => assert!(errs.iter().any(|err| matches!(err, ToJsonSchemaError::NoPR { kind : PR::Resource, ..  })))
+                )
+            ),
+        }
     }
 
     #[test]
@@ -74,17 +75,15 @@ mod demo_tests {
         entity a;
         action "Foo" appliesTo { principal: a, context: {}  };
         "#;
-        let (schema, _) = SchemaFragment::from_str_natural(src).unwrap();
-        let foo = schema.0.get(&None).unwrap().actions.get("Foo").unwrap();
-        assert_matches!(foo,
-            ActionType { applies_to : Some(ApplySpec { resource_types : None, principal_types : Some(principals), ..}), .. } =>
-                {
-                    match principals.as_slice() {
-                        [a] if a == &"a".parse().unwrap() => (),
-                        _ => panic!("Bad principals")
-                    }
-                }
-        );
+
+        match SchemaFragment::from_str_natural(src) {
+            Ok(_) => panic!("Should have failed to parse!"),
+            Err(e) => assert_matches!(e,
+                HumanSchemaError::Parsing(err) => assert_matches!(err.inner(),
+                    HumanSyntaxParseErrors::JsonError(errs) => assert!(errs.iter().any(|err| matches!(err, ToJsonSchemaError::NoPR { kind : PR::Resource, ..  })))
+                )
+            ),
+        }
     }
 
     #[test]
@@ -93,17 +92,14 @@ mod demo_tests {
         entity a;
         action "Foo" appliesTo { resource: a, context: {}  };
         "#;
-        let (schema, _) = SchemaFragment::from_str_natural(src).unwrap();
-        let foo = schema.0.get(&None).unwrap().actions.get("Foo").unwrap();
-        assert_matches!(foo,
-            ActionType { applies_to : Some(ApplySpec { resource_types : Some(resources), principal_types : None, ..}), .. } =>
-                {
-                    match resources.as_slice() {
-                        [a] if a == &"a".parse().unwrap() => (),
-                        _ => panic!("Bad principals")
-                    }
-                }
-        );
+        match SchemaFragment::from_str_natural(src) {
+            Ok(_) => panic!("Should have failed to parse!"),
+            Err(e) => assert_matches!(e,
+                HumanSchemaError::Parsing(err) => assert_matches!(err.inner(),
+                    HumanSyntaxParseErrors::JsonError(errs) => assert!(errs.iter().any(|err| matches!(err, ToJsonSchemaError::NoPR { kind : PR::Principal, ..  })))
+                )
+            ),
+        }
     }
 
     #[test]
@@ -114,14 +110,14 @@ mod demo_tests {
                 resource : [a]
             };
         "#;
-        let (schema, _) = SchemaFragment::from_str_natural(src).unwrap();
-        let unqual = schema.0.get(&None).unwrap();
-        let foo = unqual.actions.get("Foo").unwrap();
-        assert_matches!(foo,
-                ActionType { applies_to : Some(ApplySpec { resource_types : Some(resources), principal_types : None, .. }  ), ..} =>
-                    assert_matches!(resources.as_slice(), [a] => assert_eq!(a, &"a".parse().unwrap()))
-            ,
-        );
+        match SchemaFragment::from_str_natural(src) {
+            Ok(_) => panic!("Should have failed to parse!"),
+            Err(e) => assert_matches!(e,
+                HumanSchemaError::Parsing(err) => assert_matches!(err.inner(),
+                    HumanSyntaxParseErrors::JsonError(errs) => assert!(errs.iter().any(|err| matches!(err, ToJsonSchemaError::NoPR { kind : PR::Principal, ..  })))
+                )
+            ),
+        }
     }
 
     #[test]
@@ -133,17 +129,14 @@ mod demo_tests {
                 resource : [a, b]
             };
         "#;
-        let (schema, _) = SchemaFragment::from_str_natural(src).unwrap();
-        let unqual = schema.0.get(&None).unwrap();
-        let foo = unqual.actions.get("Foo").unwrap();
-        assert_matches!(foo,
-                ActionType { applies_to : Some(ApplySpec { resource_types : Some(resources), principal_types : None, .. }  ), ..} =>
-                    assert_matches!(resources.as_slice(), [a, b] => {
-                        assert_eq!(a, &"a".parse().unwrap());
-                        assert_eq!(b, &"b".parse().unwrap())
-                    })
-            ,
-        );
+        match SchemaFragment::from_str_natural(src) {
+            Ok(_) => panic!("Should have failed to parse!"),
+            Err(e) => assert_matches!(e,
+                HumanSchemaError::Parsing(err) => assert_matches!(err.inner(),
+                    HumanSyntaxParseErrors::JsonError(errs) => assert!(errs.iter().any(|err| matches!(err, ToJsonSchemaError::NoPR { kind : PR::Principal, ..  })))
+                )
+            ),
+        }
     }
 
     #[test]
@@ -154,14 +147,14 @@ mod demo_tests {
                 principal: [a]
             };
         "#;
-        let (schema, _) = SchemaFragment::from_str_natural(src).unwrap();
-        let unqual = schema.0.get(&None).unwrap();
-        let foo = unqual.actions.get("Foo").unwrap();
-        assert_matches!(foo,
-                ActionType { applies_to : Some(ApplySpec { resource_types : None, principal_types : Some(principals), .. }  ), ..} =>
-                    assert_matches!(principals.as_slice(), [a] => assert_eq!(a, &"a".parse().unwrap()))
-            ,
-        );
+        match SchemaFragment::from_str_natural(src) {
+            Ok(_) => panic!("Should have failed to parse!"),
+            Err(e) => assert_matches!(e,
+                HumanSchemaError::Parsing(err) => assert_matches!(err.inner(),
+                    HumanSyntaxParseErrors::JsonError(errs) => assert!(errs.iter().any(|err| matches!(err, ToJsonSchemaError::NoPR { kind : PR::Resource, ..  })))
+                )
+            ),
+        }
     }
 
     #[test]
@@ -173,17 +166,14 @@ mod demo_tests {
                 principal: [a, b]
             };
         "#;
-        let (schema, _) = SchemaFragment::from_str_natural(src).unwrap();
-        let unqual = schema.0.get(&None).unwrap();
-        let foo = unqual.actions.get("Foo").unwrap();
-        assert_matches!(foo,
-                ActionType { applies_to : Some(ApplySpec { resource_types : None, principal_types : Some(principals), .. }  ), ..} =>
-                    assert_matches!(principals.as_slice(), [a,b] => {
-                        assert_eq!(a, &"a".parse().unwrap());
-                        assert_eq!(b, &"b".parse().unwrap());
-                })
-            ,
-        );
+        match SchemaFragment::from_str_natural(src) {
+            Ok(_) => panic!("Should have failed to parse!"),
+            Err(e) => assert_matches!(e,
+                HumanSchemaError::Parsing(err) => assert_matches!(err.inner(),
+                    HumanSyntaxParseErrors::JsonError(errs) => assert!(errs.iter().any(|err| matches!(err, ToJsonSchemaError::NoPR { kind : PR::Resource, ..  })))
+                )
+            ),
+        }
     }
 
     #[test]
@@ -202,13 +192,20 @@ mod demo_tests {
         let unqual = schema.0.get(&None).unwrap();
         let foo = unqual.actions.get("Foo").unwrap();
         assert_matches!(foo,
-                ActionType { applies_to : Some(ApplySpec { resource_types : Some(resources), principal_types : Some(principals), .. }  ), ..} =>
+                ActionType {
+                    applies_to : Some(ApplySpec {
+                        resource_types,
+                        principal_types,
+                        ..
+                    }),
+                    ..
+                } =>
                 {
-                    assert_matches!(principals.as_slice(), [a,b] => {
+                    assert_matches!(principal_types.as_slice(), [a,b] => {
                         assert_eq!(a, &"a".parse().unwrap());
                         assert_eq!(b, &"b".parse().unwrap());
                 });
-                assert_matches!(resources.as_slice(), [c,d] =>  {
+                assert_matches!(resource_types.as_slice(), [c,d] =>  {
                         assert_eq!(c, &"c".parse().unwrap());
                         assert_eq!(d, &"d".parse().unwrap());
 
@@ -234,13 +231,20 @@ mod demo_tests {
         let unqual = schema.0.get(&None).unwrap();
         let foo = unqual.actions.get("Foo").unwrap();
         assert_matches!(foo,
-                ActionType { applies_to : Some(ApplySpec { resource_types : Some(resources), principal_types : Some(principals), .. }  ), ..} =>
+                ActionType {
+                    applies_to : Some(ApplySpec {
+                        resource_types,
+                        principal_types,
+                        ..
+                    }),
+                    ..
+                } =>
                 {
-                    assert_matches!(principals.as_slice(), [a,b] => {
+                    assert_matches!(principal_types.as_slice(), [a,b] => {
                         assert_eq!(a, &"a".parse().unwrap());
                         assert_eq!(b, &"b".parse().unwrap());
                 });
-                assert_matches!(resources.as_slice(), [c,d] =>  {
+                assert_matches!(resource_types.as_slice(), [c,d] =>  {
                         assert_eq!(c, &"c".parse().unwrap());
                         assert_eq!(d, &"d".parse().unwrap());
 
@@ -329,9 +333,7 @@ mod demo_tests {
         let namespace = NamespaceDefinition::new(empty(), once(("foo".to_smolstr(), action)));
         let fragment = SchemaFragment(HashMap::from([(Some("bar".parse().unwrap()), namespace)]));
         let as_src = fragment.as_natural_schema().unwrap();
-        let expected = r#"action "foo" appliesTo {
-  context: {}
-};"#;
+        let expected = r#"action "foo";"#;
         assert!(as_src.contains(expected), "src was:\n`{as_src}`");
     }
 
@@ -340,8 +342,11 @@ mod demo_tests {
         assert!(SchemaFragment::from_str_natural(
             r#"
         type empty = {};
+        entity E;
         action "Foo" appliesTo {
             context: empty,
+            principal: [E],
+            resource: [E]
         };
     "#
         )
@@ -350,7 +355,9 @@ mod demo_tests {
             r#"
     type flag = { value: __cedar::Bool };
     action "Foo" appliesTo {
-        context: flag
+        context: flag,
+        principal: [E],
+        resource: [E]
     };
 "#
         )
@@ -359,7 +366,9 @@ mod demo_tests {
             r#"
 namespace Bar { type empty = {}; }
 action "Foo" appliesTo {
-    context: Bar::empty
+    context: Bar::empty,
+    principal: [E],
+    resource: [E]
 };
 "#
         )
@@ -368,7 +377,9 @@ action "Foo" appliesTo {
             r#"
 namespace Bar { type flag = { value: Bool }; }
 namespace Baz {action "Foo" appliesTo {
-    context: Bar::flag
+    context: Bar::flag,
+    principal: [E],
+    resource: [E]
 };}
 "#
         )
@@ -385,8 +396,8 @@ namespace Baz {action "Foo" appliesTo {
           operation: Long,
           request: authcontext
         };
-        action view appliesTo { context: authcontext };
-        action upload appliesTo { context: authcontext };
+        action view appliesTo { context: authcontext, principal: [E], resource: [E] };
+        action upload appliesTo { context: authcontext, principal: [E], resource: [E]};
 "#
         )
         .is_ok());
@@ -408,8 +419,8 @@ namespace Baz {action "Foo" appliesTo {
                 ActionType {
                     attributes: None,
                     applies_to: Some(ApplySpec {
-                        resource_types: Some(vec![]),
-                        principal_types: Some(vec!["a".parse().unwrap()]),
+                        resource_types: vec![],
+                        principal_types: vec!["a".parse().unwrap()],
                         context: AttributesOrContext::default(),
                     }),
                     member_of: None,
@@ -1145,6 +1156,7 @@ mod translator_tests {
         types::{EntityLUB, Type},
         SchemaFragment, SchemaTypeVariant, TypeOfAttribute, ValidatorSchema,
     };
+    use cedar_policy_core::ast as cedar_ast;
 
     #[test]
     fn use_reserved_namespace() {
@@ -1347,9 +1359,9 @@ mod translator_tests {
             schema.try_into().expect("should be a valid schema");
         for (name, et) in validator_schema.entity_types() {
             if name.to_string() == "A::C" || name.to_string() == "X::Y" {
-                assert!(et
-                    .descendants
-                    .contains(&cedar_policy_core::ast::Name::from_normalized_str("A::B").unwrap()));
+                assert!(et.descendants.contains(&cedar_ast::EntityType::new(
+                    cedar_policy_core::ast::Name::from_normalized_str("A::B").unwrap()
+                )));
             } else {
                 assert!(et.descendants.is_empty());
             }
@@ -1413,6 +1425,10 @@ mod translator_tests {
         assert!(validator_schema.is_ok());
     }
 
+    // PANIC SAFETY: testing
+    #[allow(clippy::unwrap_used)]
+    // PANIC SAFETY: testing
+    #[allow(clippy::indexing_slicing)]
     #[test]
     fn type_name_resolution_cross_namespace() {
         let (schema, _) = SchemaFragment::from_str_natural(
@@ -1432,7 +1448,9 @@ mod translator_tests {
         let validator_schema: ValidatorSchema =
             schema.try_into().expect("should be a valid schema");
         let et = validator_schema
-            .get_entity_type(&cedar_policy_core::ast::Name::from_normalized_str("A::B").unwrap())
+            .get_entity_type(&cedar_ast::EntityType::new(
+                cedar_policy_core::ast::Name::from_normalized_str("A::B").unwrap(),
+            ))
             .unwrap();
         let attr = et.attr("foo").unwrap();
         assert!(

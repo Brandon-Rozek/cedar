@@ -58,8 +58,8 @@ fn action_entity_type_parses() {
 /// Return true when an entity type is an action entity type. This compares the
 /// base name for the type, so this will return true for any entity type named
 /// `Action` regardless of namespaces.
-pub(crate) fn is_action_entity_type(ty: &Name) -> bool {
-    ty.basename().as_ref() == ACTION_ENTITY_TYPE
+pub(crate) fn is_action_entity_type(ty: &EntityType) -> bool {
+    ty.is_action()
 }
 
 /// A single namespace definition from the schema json or human syntax,
@@ -96,7 +96,7 @@ pub struct TypeDefs {
 /// parents and attributes may reference undeclared entity/common types.
 #[derive(Debug)]
 pub struct EntityTypesDef {
-    pub(super) entity_types: HashMap<Name, EntityTypeFragment>,
+    pub(super) entity_types: HashMap<EntityType, EntityTypeFragment>,
 }
 
 /// Defines an EntityType where we have not resolved typedefs occurring in the
@@ -113,7 +113,7 @@ pub struct EntityTypeFragment {
     /// `memberOfTypes` list. These types might be declared in a different
     /// namespace, so we will check if they are declared in any fragment when
     /// constructing a `ValidatorSchema`.
-    pub(super) parents: HashSet<Name>,
+    pub(super) parents: HashSet<EntityType>,
 }
 
 /// Action declarations held in a `ValidatorNamespaceDef`. Entity types
@@ -271,9 +271,12 @@ impl ValidatorNamespaceDef {
         schema_namespace: Option<&Name>,
         extensions: Extensions<'_>,
     ) -> Result<EntityTypesDef> {
-        let mut entity_types = HashMap::with_capacity(schema_files_types.len());
+        let mut entity_types: HashMap<EntityType, _> =
+            HashMap::with_capacity(schema_files_types.len());
         for (id, entity_type) in schema_files_types {
-            let name = Name::from(id.clone()).prefix_namespace_if_unqualified(schema_namespace);
+            let name = cedar_policy_core::ast::EntityType::new(
+                Name::from(id.clone()).prefix_namespace_if_unqualified(schema_namespace),
+            );
             match entity_types.entry(name) {
                 Entry::Vacant(ventry) => {
                     ventry.insert(EntityTypeFragment {
@@ -290,7 +293,7 @@ impl ValidatorNamespaceDef {
                     });
                 }
                 Entry::Occupied(_) => {
-                    return Err(DuplicateEntityTypeError(Name::unqualified_name(id)).into());
+                    return Err(DuplicateEntityTypeError(Name::unqualified_name(id).into()).into());
                 }
             }
         }
@@ -554,21 +557,17 @@ impl ValidatorNamespaceDef {
     /// of the entity type names cannot be parsed, then the `Err` case is
     /// returned, and it will indicate which name did not parse.
     fn parse_apply_spec_type_list(
-        types: Option<Vec<Name>>,
+        types: Vec<EntityType>,
         namespace: Option<&Name>,
     ) -> HashSet<EntityType> {
         types
-            .map(|types| {
-                types
-                    .iter()
-                    // Parse each type name string into a `Name`, generating an
-                    // `EntityTypeParseError` when the string is not a valid
-                    // name.
-                    .map(|ty| EntityType::Specified(ty.prefix_namespace_if_unqualified(namespace)))
-                    // Fail if any of the types failed.
-                    .collect::<HashSet<_>>()
-            })
-            .unwrap_or_else(|| HashSet::from([EntityType::Unspecified]))
+            .iter()
+            // Parse each type name string into a `Name`, generating an
+            // `EntityTypeParseError` when the string is not a valid
+            // name.
+            .map(|ty| ty.prefix_namespace_if_unqualified(namespace))
+            // Fail if any of the types failed.
+            .collect::<HashSet<_>>()
     }
 
     /// Take an action identifier as a string and use it to construct an
@@ -593,7 +592,11 @@ impl ValidatorNamespaceDef {
                 None => Name::unqualified_name(id),
             }
         };
-        EntityUID::from_components(namespaced_action_type, Eid::new(action_id.id.clone()), None)
+        EntityUID::from_components(
+            namespaced_action_type.into(),
+            Eid::new(action_id.id.clone()),
+            None,
+        )
     }
 
     /// Implemented to convert a type as written in the schema json format into the

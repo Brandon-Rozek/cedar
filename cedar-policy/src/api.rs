@@ -111,7 +111,6 @@ pub mod entities {
 }
 
 /// Entity datatype
-// INVARIANT(UidOfEntityNotUnspecified): The `EntityUid` of an `Entity` cannot be unspecified
 #[repr(transparent)]
 #[derive(Debug, Clone, PartialEq, Eq, RefCast)]
 pub struct Entity(ast::Entity);
@@ -198,7 +197,6 @@ impl Entity {
     /// assert_eq!(alice.uid(), euid);
     /// ```
     pub fn uid(&self) -> EntityUid {
-        // INVARIANT: By invariant on self and `EntityUid`: Our Uid can't be unspecified
         EntityUid::new(self.0.uid().clone())
     }
 
@@ -698,7 +696,6 @@ impl Entities {
             Dereference::Residual(_) | Dereference::NoSuchEntity => None,
             Dereference::Data(e) => Some(e),
         }?;
-        // Invariant: No way to write down the unspecified EntityUid, so no way to have ancestors that are unspecified
         Some(entity.ancestors().map(EntityUid::ref_cast))
     }
 
@@ -761,7 +758,7 @@ impl Authorizer {
     /// #
     /// # let c = Context::empty();
     /// #
-    /// # let request: Request = Request::new(Some(p), Some(a), Some(r), c, None).unwrap();
+    /// # let request: Request = Request::new(p, a, r, c, None).unwrap();
     /// #
     /// # // create a policy
     /// # let s = r#"permit(
@@ -815,7 +812,7 @@ impl Authorizer {
     ///
     /// let c = Context::empty();
     ///
-    /// let request: Request = Request::new(Some(p), Some(a), Some(r), c, None).unwrap();
+    /// let request: Request = Request::new(p, a, r, c, None).unwrap();
     ///
     /// // create a policy
     /// let s = r#"
@@ -1021,7 +1018,7 @@ impl Diagnostics {
     /// #
     /// # let c = Context::empty();
     /// #
-    /// # let request: Request = Request::new(Some(p), Some(a), Some(r), c, None).unwrap();
+    /// # let request: Request = Request::new(p, a, r, c, None).unwrap();
     /// #
     /// # // create a policy
     /// # let s = r#"permit(
@@ -1081,7 +1078,7 @@ impl Diagnostics {
     /// #
     /// # let c = Context::empty();
     /// #
-    /// # let request: Request = Request::new(Some(p), Some(a), Some(r), c, None).unwrap();
+    /// # let request: Request = Request::new(p, a, r, c, None).unwrap();
     /// #
     /// # // create a policy
     /// # let s = r#"permit(
@@ -3071,21 +3068,10 @@ impl<S> RequestBuilder<S> {
     ///
     /// Note that you can create the `EntityUid` using `.parse()` on any
     /// string (via the `FromStr` implementation for `EntityUid`).
-    ///
-    /// Here, passing `None` for `principal` indicates that `principal` does
-    /// not contribute to authorization decisions (e.g., because it is not
-    /// used in your policies).
-    /// This is different than Unknown for partial-evaluation purposes.
     #[must_use]
-    pub fn principal(self, principal: Option<EntityUid>) -> Self {
+    pub fn principal(self, principal: EntityUid) -> Self {
         Self {
-            principal: match principal {
-                Some(p) => ast::EntityUIDEntry::concrete(p.into(), None),
-                None => ast::EntityUIDEntry::concrete(
-                    ast::EntityUID::unspecified_from_eid(ast::Eid::new("principal")),
-                    None,
-                ),
-            },
+            principal: ast::EntityUIDEntry::concrete(principal.into(), None),
             ..self
         }
     }
@@ -3094,21 +3080,10 @@ impl<S> RequestBuilder<S> {
     ///
     /// Note that you can create the `EntityUid` using `.parse()` on any
     /// string (via the `FromStr` implementation for `EntityUid`).
-    ///
-    /// Here, passing `None` for `action` indicates that `action` does
-    /// not contribute to authorization decisions (e.g., because it is not
-    /// used in your policies).
-    /// This is different than Unknown for partial-evaluation purposes.
     #[must_use]
-    pub fn action(self, action: Option<EntityUid>) -> Self {
+    pub fn action(self, action: EntityUid) -> Self {
         Self {
-            action: match action {
-                Some(a) => ast::EntityUIDEntry::concrete(a.into(), None),
-                None => ast::EntityUIDEntry::concrete(
-                    ast::EntityUID::unspecified_from_eid(ast::Eid::new("action")),
-                    None,
-                ),
-            },
+            action: ast::EntityUIDEntry::concrete(action.into(), None),
             ..self
         }
     }
@@ -3117,21 +3092,10 @@ impl<S> RequestBuilder<S> {
     ///
     /// Note that you can create the `EntityUid` using `.parse()` on any
     /// string (via the `FromStr` implementation for `EntityUid`).
-    ///
-    /// Here, passing `None` for `resource` indicates that `resource` does
-    /// not contribute to authorization decisions (e.g., because it is not
-    /// used in your policies).
-    /// This is different than Unknown for partial-evaluation purposes.
     #[must_use]
-    pub fn resource(self, resource: Option<EntityUid>) -> Self {
+    pub fn resource(self, resource: EntityUid) -> Self {
         Self {
-            resource: match resource {
-                Some(r) => ast::EntityUIDEntry::concrete(r.into(), None),
-                None => ast::EntityUIDEntry::concrete(
-                    ast::EntityUID::unspecified_from_eid(ast::Eid::new("resource")),
-                    None,
-                ),
-            },
+            resource: ast::EntityUIDEntry::concrete(resource.into(), None),
             ..self
         }
     }
@@ -3219,28 +3183,16 @@ impl Request {
     /// If `schema` is present, this constructor will validate that the
     /// `Request` complies with the given `schema`.
     pub fn new(
-        principal: Option<EntityUid>,
-        action: Option<EntityUid>,
-        resource: Option<EntityUid>,
+        principal: EntityUid,
+        action: EntityUid,
+        resource: EntityUid,
         context: Context,
         schema: Option<&Schema>,
     ) -> Result<Self, RequestValidationError> {
-        let p = principal.map_or_else(
-            || ast::EntityUID::unspecified_from_eid(ast::Eid::new("principal")),
-            EntityUid::into,
-        );
-        let a = action.map_or_else(
-            || ast::EntityUID::unspecified_from_eid(ast::Eid::new("action")),
-            EntityUid::into,
-        );
-        let r = resource.map_or_else(
-            || ast::EntityUID::unspecified_from_eid(ast::Eid::new("resource")),
-            EntityUid::into,
-        );
         Ok(Self(ast::Request::new(
-            (p, None),
-            (a, None),
-            (r, None),
+            (principal.into(), None),
+            (action.into(), None),
+            (resource.into(), None),
             context.0,
             schema.map(|schema| &schema.0),
             Extensions::all_available(),
@@ -3248,43 +3200,28 @@ impl Request {
     }
 
     /// Get the principal component of the request. Returns `None` if the principal is
-    /// "unspecified" (i.e., constructed by passing `None` into the constructor) or
     /// "unknown" (i.e., constructed using the partial evaluation APIs).
     pub fn principal(&self) -> Option<&EntityUid> {
         match self.0.principal() {
-            ast::EntityUIDEntry::Known { euid, .. } => match euid.entity_type() {
-                // INVARIANT: we ensure Concrete-ness here
-                ast::EntityType::Specified(_) => Some(EntityUid::ref_cast(euid.as_ref())),
-                ast::EntityType::Unspecified => None,
-            },
+            ast::EntityUIDEntry::Known { euid, .. } => Some(EntityUid::ref_cast(euid.as_ref())),
             ast::EntityUIDEntry::Unknown { .. } => None,
         }
     }
 
     /// Get the action component of the request. Returns `None` if the action is
-    /// "unspecified" (i.e., constructed by passing `None` into the constructor) or
     /// "unknown" (i.e., constructed using the partial evaluation APIs).
     pub fn action(&self) -> Option<&EntityUid> {
         match self.0.action() {
-            ast::EntityUIDEntry::Known { euid, .. } => match euid.entity_type() {
-                // INVARIANT: we ensure Concrete-ness here
-                ast::EntityType::Specified(_) => Some(EntityUid::ref_cast(euid.as_ref())),
-                ast::EntityType::Unspecified => None,
-            },
+            ast::EntityUIDEntry::Known { euid, .. } => Some(EntityUid::ref_cast(euid.as_ref())),
             ast::EntityUIDEntry::Unknown { .. } => None,
         }
     }
 
     /// Get the resource component of the request. Returns `None` if the resource is
-    /// "unspecified" (i.e., constructed by passing `None` into the constructor) or
     /// "unknown" (i.e., constructed using the partial evaluation APIs).
     pub fn resource(&self) -> Option<&EntityUid> {
         match self.0.resource() {
-            ast::EntityUIDEntry::Known { euid, .. } => match euid.entity_type() {
-                // INVARIANT: we ensure Concrete-ness here
-                ast::EntityType::Specified(_) => Some(EntityUid::ref_cast(euid.as_ref())),
-                ast::EntityType::Unspecified => None,
-            },
+            ast::EntityUIDEntry::Known { euid, .. } => Some(EntityUid::ref_cast(euid.as_ref())),
             ast::EntityUIDEntry::Unknown { .. } => None,
         }
     }
@@ -3319,7 +3256,7 @@ impl Context {
     /// # let p = EntityUid::from_str(r#"User::"alice""#).unwrap();
     /// # let a = EntityUid::from_str(r#"Action::"view""#).unwrap();
     /// # let r = EntityUid::from_str(r#"Album::"trip""#).unwrap();
-    /// # let request: Request = Request::new(Some(p), Some(a), Some(r), context, None).unwrap();
+    /// # let request: Request = Request::new(p, a, r, context, None).unwrap();
     /// ```
     pub fn from_pairs(
         pairs: impl IntoIterator<Item = (String, RestrictedExpression)>,
@@ -3357,7 +3294,7 @@ impl Context {
     /// # let p = EntityUid::from_str(r#"User::"alice""#).unwrap();
     /// # let a = EntityUid::from_str(r#"Action::"view""#).unwrap();
     /// # let r = EntityUid::from_str(r#"Album::"trip""#).unwrap();
-    /// # let request: Request = Request::new(Some(p), Some(a), Some(r), context, None).unwrap();
+    /// # let request: Request = Request::new(p, a, r, context, None).unwrap();
     /// ```
     pub fn from_json_str(
         json: &str,
@@ -3421,7 +3358,7 @@ impl Context {
     /// let context = Context::from_json_value(data, Some((&schema, &action))).unwrap();
     /// # let p = EntityUid::from_str(r#"User::"alice""#).unwrap();
     /// # let r = EntityUid::from_str(r#"Album::"trip""#).unwrap();
-    /// # let request: Request = Request::new(Some(p), Some(action), Some(r), context, Some(&schema)).unwrap();
+    /// # let request: Request = Request::new(p, action, r, context, Some(&schema)).unwrap();
     /// ```
     pub fn from_json_value(
         json: serde_json::Value,
@@ -3467,7 +3404,7 @@ impl Context {
     /// # let r_eid = EntityId::from_str("trip").unwrap();
     /// # let r_name: EntityTypeName = EntityTypeName::from_str("Album").unwrap();
     /// # let r = EntityUid::from_type_name_and_id(r_name, r_eid);
-    /// # let request: Request = Request::new(Some(p), Some(a), Some(r), context, None).unwrap();
+    /// # let request: Request = Request::new(p, a, r, context, None).unwrap();
     /// ```
     pub fn from_json_file(
         json: impl std::io::Read,

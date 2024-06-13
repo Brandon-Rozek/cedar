@@ -356,6 +356,8 @@ pub enum ToJsonSchemaError {
     DuplicateContext { loc1: Loc, loc2: Loc },
     #[error("Duplicate {kind} decleration. Action may have at most once {kind} declaration")]
     DuplicatePR { kind: PR, loc1: Loc, loc2: Loc },
+    #[error("Missing {kind} declaration for {name}. Actions must define both a `principals` and `resources` field")]
+    NoPR { kind: PR, name: SmolStr, loc: Loc },
 
     /// Error raised when there are duplicate namespace IDs
     #[error("Duplicate namespace IDs: `{namespace_id}`")]
@@ -408,7 +410,7 @@ impl Diagnostic for ToJsonSchemaError {
             ToJsonSchemaError::UnknownTypeName(node) => Some(Box::new(std::iter::once(
                 LabeledSpan::underline(node.loc.span),
             ))),
-            ToJsonSchemaError::UseReservedNamespace(loc) => {
+            ToJsonSchemaError::UseReservedNamespace(loc) | ToJsonSchemaError::NoPR { loc, .. } => {
                 Some(Box::new(std::iter::once(LabeledSpan::underline(loc.span))))
             }
         }

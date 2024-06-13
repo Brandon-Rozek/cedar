@@ -28,38 +28,71 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, TryFromInto};
 use smol_str::SmolStr;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::str::FromStr;
 use thiserror::Error;
 
-/// We support two types of entities. The first is a nominal type (e.g., User, Action)
-/// and the second is an unspecified type, which is used (internally) to represent cases
-/// where the input request does not provide a principal, action, and/or resource.
+/// Entity Type Names are just Name's, but we have some operations on them specific to Entity Types.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub enum EntityType {
-    /// Concrete nominal type
-    Specified(Name),
-    /// Unspecified
-    Unspecified,
-}
+#[serde(transparent)]
+pub struct EntityType(Name);
 
 impl EntityType {
     /// Is this an Action entity type
     pub fn is_action(&self) -> bool {
-        match self {
-            Self::Specified(name) => name.basename() == &Id::new_unchecked("Action"),
-            Self::Unspecified => false,
-        }
+        self.0.basename() == &Id::new_unchecked("Action")
+    }
+
+    /// The name of this entity type
+    pub fn name(&self) -> &Name {
+        &self.0
+    }
+
+    /// Construct a new [`EntityType`]
+    pub fn new(name: Name) -> Self {
+        Self(name)
+    }
+
+    /// Get the source location for this Entity Type
+    pub fn loc(&self) -> Option<&Loc> {
+        self.0.loc()
+    }
+
+    /// Prefix the name with a optional namespace
+    /// When the name is not an `Id`, it doesn't make sense to prefix any
+    /// namespace and hence this method returns a copy of `self`
+    /// When the name is an `Id`, prefix it with the optional namespace
+    /// e.g., prefix `A::B`` with `Some(C)` or `None` produces `A::B`
+    /// prefix `A` with `Some(B::C)` yields `B::C::A`
+    pub fn prefix_namespace_if_unqualified(&self, namespace: Option<&Name>) -> Self {
+        Self(self.0.prefix_namespace_if_unqualified(namespace))
     }
 }
 
-// Note: the characters '<' and '>' are not allowed in `Name`s, so the display for
-// `Unspecified` never conflicts with `Specified(name)`.
+impl From<Name> for EntityType {
+    fn from(n: Name) -> Self {
+        Self(n)
+    }
+}
+
+impl AsRef<Name> for EntityType {
+    fn as_ref(&self) -> &Name {
+        &self.0
+    }
+}
+
+impl FromStr for EntityType {
+    type Err = <Name as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let name: Name = s.parse()?;
+        Ok(Self(name))
+    }
+}
+
 impl std::fmt::Display for EntityType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Unspecified => write!(f, "<Unspecified>"),
-            Self::Specified(name) => write!(f, "{}", name),
-        }
+        write!(f, "{}", self.0)
     }
 }
 
@@ -133,7 +166,7 @@ impl EntityUID {
     pub(crate) fn test_entity_type() -> EntityType {
         let name = Name::parse_unqualified_name("test_entity_type")
             .expect("test_entity_type should be a valid identifier");
-        EntityType::Specified(name)
+        EntityType(name)
     }
     // by default, Coverlay does not track coverage for lines after a line
     // containing #[cfg(test)].
@@ -144,7 +177,7 @@ impl EntityUID {
     /// Create an `EntityUID` with the given (unqualified) typename, and the given string as its EID.
     pub fn with_eid_and_type(typename: &str, eid: &str) -> Result<Self, ParseErrors> {
         Ok(Self {
-            ty: EntityType::Specified(Name::parse_unqualified_name(typename)?),
+            ty: EntityType(Name::parse_unqualified_name(typename)?),
             eid: Eid(eid.into()),
             loc: None,
         })
@@ -162,21 +195,8 @@ impl EntityUID {
     }
 
     /// Create a nominally-typed `EntityUID` with the given typename and EID
-    pub fn from_components(name: Name, eid: Eid, loc: Option<Loc>) -> Self {
-        Self {
-            ty: EntityType::Specified(name),
-            eid,
-            loc,
-        }
-    }
-
-    /// Create an unspecified `EntityUID` with the given EID
-    pub fn unspecified_from_eid(eid: Eid) -> Self {
-        Self {
-            ty: EntityType::Unspecified,
-            eid,
-            loc: None,
-        }
+    pub fn from_components(ty: EntityType, eid: Eid, loc: Option<Loc>) -> Self {
+        Self { ty, eid, loc }
     }
 
     /// Get the type component.
@@ -588,14 +608,16 @@ mod test {
     fn test_euid_equality() {
         let e1 = EntityUID::with_eid("foo");
         let e2 = EntityUID::from_components(
-            Name::parse_unqualified_name("test_entity_type").expect("should be a valid identifier"),
+            Name::parse_unqualified_name("test_entity_type")
+                .expect("should be a valid identifier")
+                .into(),
             Eid("foo".into()),
             None,
         );
-        let e3 = EntityUID::unspecified_from_eid(Eid("foo".into()));
-        let e4 = EntityUID::unspecified_from_eid(Eid("bar".into()));
         let e5 = EntityUID::from_components(
-            Name::parse_unqualified_name("Unspecified").expect("should be a valid identifier"),
+            Name::parse_unqualified_name("Unspecified")
+                .expect("should be a valid identifier")
+                .into(),
             Eid("foo".into()),
             None,
         );
@@ -603,21 +625,12 @@ mod test {
         // an EUID is equal to itself
         assert_eq!(e1, e1);
         assert_eq!(e2, e2);
-        assert_eq!(e3, e3);
 
         // constructing with `with_euid` or `from_components` is the same
         assert_eq!(e1, e2);
 
         // other pairs are not equal
-        assert!(e1 != e3);
-        assert!(e1 != e4);
         assert!(e1 != e5);
-        assert!(e3 != e4);
-        assert!(e3 != e5);
-        assert!(e4 != e5);
-
-        // e3 and e5 are displayed differently
-        assert!(format!("{e3}") != format!("{e5}"));
     }
 
     #[test]

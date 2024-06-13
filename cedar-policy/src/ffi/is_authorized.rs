@@ -446,7 +446,7 @@ pub struct AuthorizationCall {
     principal: Option<JsonValueWithNoDuplicateKeys>,
     /// The action the principal is taking
     #[cfg_attr(feature = "wasm", tsify(type = "{type: string, id: string}"))]
-    action: JsonValueWithNoDuplicateKeys,
+    action: Option<JsonValueWithNoDuplicateKeys>,
     /// The resource being acted on by the principal
     #[cfg_attr(feature = "wasm", tsify(type = "{type: string, id: string}"))]
     resource: Option<JsonValueWithNoDuplicateKeys>,
@@ -478,18 +478,23 @@ fn constant_true() -> bool {
 /// Parses the given JSON into an [`EntityUid`], or if it fails, adds an
 /// appropriate error to `errs` and returns `None`.
 fn parse_entity_uid(
-    entity_uid_json: JsonValueWithNoDuplicateKeys,
+    entity_uid_json: Option<JsonValueWithNoDuplicateKeys>,
     category: &str,
     errs: &mut Vec<miette::Report>,
 ) -> Option<EntityUid> {
-    match EntityUid::from_json(entity_uid_json.into())
-        .wrap_err_with(|| format!("Failed to parse {category}"))
-    {
-        Ok(euid) => Some(euid),
-        Err(e) => {
-            errs.push(e);
-            None
+    if let Some(entity_uid_json) = entity_uid_json {
+        match EntityUid::from_json(entity_uid_json.into())
+            .wrap_err_with(|| format!("Failed to parse {category}"))
+        {
+            Ok(euid) => Some(euid),
+            Err(e) => {
+                errs.push(e);
+                None
+            }
         }
+    } else {
+        errs.push(miette!("Missing `{category}` in request"));
+        None
     }
 }
 
@@ -541,38 +546,41 @@ impl AuthorizationCall {
                 None
             }
         };
-        let principal = self
-            .principal
-            .and_then(|p| parse_entity_uid(p, "principal", &mut errs));
+
+        let principal = parse_entity_uid(self.principal, "principal", &mut errs);
         let action = parse_entity_uid(self.action, "action", &mut errs);
-        let resource = self
-            .resource
-            .and_then(|r| parse_entity_uid(r, "resource", &mut errs));
+        let resource = parse_entity_uid(self.resource, "resource", &mut errs);
         let context = parse_context(self.context, schema.as_ref(), action.as_ref(), &mut errs);
 
-        let request = match Request::new(
-            principal,
-            action,
-            resource,
-            context,
-            if self.validate_request {
-                schema.as_ref()
-            } else {
-                None
-            },
-        ) {
-            Ok(req) => Some(req),
-            Err(e) => {
-                errs.push(miette::Report::new(e));
-                None
+        let (request, policies, entities) = match (principal, action, resource) {
+            (Some(principal), Some(action), Some(resource)) => {
+                let request = match Request::new(
+                    principal,
+                    action,
+                    resource,
+                    context,
+                    if self.validate_request {
+                        schema.as_ref()
+                    } else {
+                        None
+                    },
+                ) {
+                    Ok(req) => Some(req),
+                    Err(e) => {
+                        errs.push(miette::Report::new(e));
+                        None
+                    }
+                };
+                let (policies, entities) = match self.slice.try_into(schema.as_ref()) {
+                    Ok((policies, entities)) => (Some(policies), Some(entities)),
+                    Err(es) => {
+                        errs.extend(es);
+                        (None, None)
+                    }
+                };
+                (request, policies, entities)
             }
-        };
-        let (policies, entities) = match self.slice.try_into(schema.as_ref()) {
-            Ok((policies, entities)) => (Some(policies), Some(entities)),
-            Err(es) => {
-                errs.extend(es);
-                (None, None)
-            }
+            _ => (None, None, None),
         };
 
         match (errs.is_empty(), request, policies, entities) {
@@ -604,25 +612,29 @@ impl AuthorizationCall {
                 None
             }
         };
-        let principal = self
-            .principal
-            .and_then(|p| parse_entity_uid(p, "principal", &mut errs));
-        let action = parse_entity_uid(self.action, "action", &mut errs);
-        let resource = self
-            .resource
-            .and_then(|r| parse_entity_uid(r, "resource", &mut errs));
         let context = parse_context(self.context, schema.as_ref(), action.as_ref(), &mut errs);
 
         let mut b = Request::builder();
-        if principal.is_some() {
-            b = b.principal(principal);
+
+        /// For P/A/R:
+        /// Only attempt to parse principal if it's present.
+        /// If it's missing, it's an unknown and not an error.
+        if let Some(principal_json) = self.principal {
+            b = b.principal(parse_entity_uid(
+                Some(principal_json),
+                "principal",
+                &mut errs,
+            ));
         }
-        if action.is_some() {
-            b = b.action(action);
+
+        if let Some(action_json) = self.action {
+            b = b.action(parse_entity_uid(Some(action_json), "action", &mut errs));
         }
-        if resource.is_some() {
-            b = b.resource(resource);
+
+        if let Some(resource_json) = self.resource {
+            b = b.resource(parse_entity_uid(Some(resource_json), "resource", &mut errs));
         }
+
         b = b.context(context);
         let request = if self.validate_request {
             match schema.as_ref() {
@@ -995,7 +1007,8 @@ mod test {
             }
         });
 
-        assert_is_not_authorized_json(call);
+        let msg = "Missing `principal` in request";
+        assert_is_authorized_json_is_failure(call, msg);
     }
 
     #[test]
