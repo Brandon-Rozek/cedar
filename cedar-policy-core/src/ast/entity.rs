@@ -31,7 +31,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::str::FromStr;
 use thiserror::Error;
 
-/// Entity Type Names are just Name's, but we have some operations on them specific to Entity Types.
+/// Entity type names are just [`Name`]s, but we have some operations on them specific to entity types.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[serde(transparent)]
