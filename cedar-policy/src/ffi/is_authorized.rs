@@ -612,27 +612,37 @@ impl AuthorizationCall {
                 None
             }
         };
-        let context = parse_context(self.context, schema.as_ref(), action.as_ref(), &mut errs);
 
         let mut b = Request::builder();
 
-        /// For P/A/R:
-        /// Only attempt to parse principal if it's present.
-        /// If it's missing, it's an unknown and not an error.
+        // For P/A/R:
+        // Only attempt to parse principal if it's present.
+        // If it's missing, it's an unknown and not an error.
         if let Some(principal_json) = self.principal {
-            b = b.principal(parse_entity_uid(
-                Some(principal_json),
-                "principal",
-                &mut errs,
-            ));
+            if let Some(principal) = parse_entity_uid(Some(principal_json), "principal", &mut errs)
+            {
+                b = b.principal(principal);
+            }
         }
 
-        if let Some(action_json) = self.action {
-            b = b.action(parse_entity_uid(Some(action_json), "action", &mut errs));
-        }
+        // If the action exists, use it to parse context, otherwise don't
+        let context = match self.action {
+            Some(action_json) => {
+                let action = parse_entity_uid(Some(action_json), "action", &mut errs);
+                let context =
+                    parse_context(self.context, schema.as_ref(), action.as_ref(), &mut errs);
+                if let Some(action) = action {
+                    b = b.action(action);
+                }
+                context
+            }
+            None => parse_context(self.context, schema.as_ref(), None, &mut errs),
+        };
 
         if let Some(resource_json) = self.resource {
-            b = b.resource(parse_entity_uid(Some(resource_json), "resource", &mut errs));
+            if let Some(resource) = parse_entity_uid(Some(resource_json), "resource", &mut errs) {
+                b = b.resource(resource);
+            }
         }
 
         b = b.context(context);
