@@ -274,7 +274,7 @@ impl ValidatorNamespaceDef {
         let mut entity_types: HashMap<EntityType, _> =
             HashMap::with_capacity(schema_files_types.len());
         for (id, entity_type) in schema_files_types {
-            let name = cedar_policy_core::ast::EntityType::new(
+            let name = cedar_policy_core::ast::EntityType::from(
                 Name::from(id.clone()).prefix_namespace_if_unqualified(schema_namespace),
             );
             match entity_types.entry(name) {

@@ -659,7 +659,7 @@ impl Display for AttributeAccess {
 // optional attribute without a guard, then the help message is also printed.
 #[cfg(test)]
 mod test_attr_access {
-    use cedar_policy_core::ast::{EntityType, EntityUID, Expr, ExprBuilder, ExprKind, Var};
+    use cedar_policy_core::ast::{EntityUID, Expr, ExprBuilder, ExprKind, Var};
 
     use super::AttributeAccess;
     use crate::types::{OpenTag, RequestEnv, Type};
@@ -673,10 +673,10 @@ mod test_attr_access {
         help: impl AsRef<str>,
     ) {
         let env = RequestEnv::DeclaredAction {
-            principal: &EntityType::new("Principal".parse().unwrap()),
+            principal: &"Principal".parse().unwrap(),
             action: &EntityUID::with_eid_and_type(crate::schema::ACTION_ENTITY_TYPE, "action")
                 .unwrap(),
-            resource: &EntityType::new("Resource".parse().unwrap()),
+            resource: &"Resource".parse().unwrap(),
             context: &Type::record_with_attributes(None, OpenTag::ClosedAttributes),
             principal_slot: None,
             resource_slot: None,

@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 
 use cedar_policy_core::{
-    ast::{self, Id, Name},
+    ast::{Id, Name},
     parser::{Loc, Node},
 };
 use itertools::Either;
@@ -355,7 +355,7 @@ impl<'a> ConversionContext<'a> {
         // First build up the defined entity type
         let member_of_types = member_of_types
             .into_iter()
-            .map(|p| ast::EntityType::new(p.into()))
+            .map(|p| Name::from(p).into())
             .collect();
         let shape = self.convert_attr_decls(attrs)?;
         let etype = EntityType {

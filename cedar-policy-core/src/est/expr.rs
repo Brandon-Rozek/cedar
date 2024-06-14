@@ -655,7 +655,7 @@ impl Expr {
                 in_expr,
             }) => ast::Name::from_normalized_str(entity_type.as_str())
                 .map_err(FromJsonError::InvalidEntityType)
-                .map(ast::EntityType::new)
+                .map(ast::EntityType::from)
                 .and_then(|entity_type_name| {
                     let left: ast::Expr = (*left).clone().try_into_ast(id.clone())?;
                     let is_expr = ast::Expr::is_entity_type(left.clone(), entity_type_name);
@@ -1078,7 +1078,7 @@ fn interpret_primary(
                 path,
                 eid: eid_node,
             } => {
-                let maybe_name = path.to_name().map(ast::EntityType::new);
+                let maybe_name = path.to_name().map(ast::EntityType::from);
                 let maybe_eid = eid_node.as_valid_string();
 
                 let (name, eid) = flatten_tuple_2(maybe_name, maybe_eid)?;

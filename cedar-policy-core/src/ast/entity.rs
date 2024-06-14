@@ -48,22 +48,12 @@ impl EntityType {
         &self.0
     }
 
-    /// Construct a new [`EntityType`]
-    pub fn new(name: Name) -> Self {
-        Self(name)
-    }
-
     /// Get the source location for this Entity Type
     pub fn loc(&self) -> Option<&Loc> {
         self.0.loc()
     }
 
-    /// Prefix the name with a optional namespace
-    /// When the name is not an `Id`, it doesn't make sense to prefix any
-    /// namespace and hence this method returns a copy of `self`
-    /// When the name is an `Id`, prefix it with the optional namespace
-    /// e.g., prefix `A::B`` with `Some(C)` or `None` produces `A::B`
-    /// prefix `A` with `Some(B::C)` yields `B::C::A`
+    /// Calls [`Name::prefix_namespace_if_unqualified`] on the underlying [`Name`]
     pub fn prefix_namespace_if_unqualified(&self, namespace: Option<&Name>) -> Self {
         Self(self.0.prefix_namespace_if_unqualified(namespace))
     }
@@ -614,7 +604,7 @@ mod test {
             Eid("foo".into()),
             None,
         );
-        let e5 = EntityUID::from_components(
+        let e3 = EntityUID::from_components(
             Name::parse_unqualified_name("Unspecified")
                 .expect("should be a valid identifier")
                 .into(),
@@ -630,7 +620,7 @@ mod test {
         assert_eq!(e1, e2);
 
         // other pairs are not equal
-        assert!(e1 != e5);
+        assert!(e1 != e3);
     }
 
     #[test]

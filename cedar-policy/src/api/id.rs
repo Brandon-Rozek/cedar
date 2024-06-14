@@ -149,7 +149,7 @@ impl FromStr for EntityTypeName {
 
     fn from_str(namespace_type_str: &str) -> Result<Self, Self::Err> {
         ast::Name::from_normalized_str(namespace_type_str)
-            .map(|name| Self(ast::EntityType::new(name)))
+            .map(|name| Self(ast::EntityType::from(name)))
             .map_err(Into::into)
     }
 }

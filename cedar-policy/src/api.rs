@@ -2505,7 +2505,6 @@ impl Policy {
     /// Get the scope constraint on this policy's action
     pub fn action_constraint(&self) -> ActionConstraint {
         // Clone the data from Core to be consistant with the other constraints
-        // INVARIANT: all of the EntityUids come from a policy, which must have Concrete EntityUids
         match self.ast.template().action_constraint() {
             ast::ActionConstraint::Any => ActionConstraint::Any,
             ast::ActionConstraint::In(ids) => ActionConstraint::In(
@@ -2553,7 +2552,6 @@ impl Policy {
         slot: ast::SlotId,
     ) -> &'a EntityUid {
         match r {
-            // INVARIANT: this comes from policy source, so must be concrete
             ast::EntityReference::EUID(euid) => EntityUid::ref_cast(euid),
             // PANIC SAFETY: This `unwrap` here is safe due the invariant (values total map) on policies.
             #[allow(clippy::unwrap_used)]
@@ -3071,7 +3069,7 @@ impl<S> RequestBuilder<S> {
     #[must_use]
     pub fn principal(self, principal: EntityUid) -> Self {
         Self {
-            principal: ast::EntityUIDEntry::concrete(principal.into(), None),
+            principal: ast::EntityUIDEntry::known(principal.into(), None),
             ..self
         }
     }
@@ -3083,7 +3081,7 @@ impl<S> RequestBuilder<S> {
     #[must_use]
     pub fn action(self, action: EntityUid) -> Self {
         Self {
-            action: ast::EntityUIDEntry::concrete(action.into(), None),
+            action: ast::EntityUIDEntry::known(action.into(), None),
             ..self
         }
     }
@@ -3095,7 +3093,7 @@ impl<S> RequestBuilder<S> {
     #[must_use]
     pub fn resource(self, resource: EntityUid) -> Self {
         Self {
-            resource: ast::EntityUIDEntry::concrete(resource.into(), None),
+            resource: ast::EntityUIDEntry::known(resource.into(), None),
             ..self
         }
     }

@@ -796,7 +796,7 @@ impl ExprOrSpecial<'_> {
     }
 
     fn into_entity_type(self) -> Result<ast::EntityType> {
-        self.into_name().map(ast::EntityType::new)
+        self.into_name().map(ast::EntityType::from)
     }
 
     fn into_name(self) -> Result<ast::Name> {
@@ -1845,7 +1845,7 @@ impl Node<Option<cst::Ref>> {
 
         match refr {
             cst::Ref::Uid { path, eid } => {
-                let maybe_path = path.to_name().map(ast::EntityType::new);
+                let maybe_path = path.to_name().map(ast::EntityType::from);
                 let maybe_eid = eid.as_valid_string().and_then(|s| {
                     to_unescaped_string(s).map_err(|escape_errs| {
                         ParseErrors::new_from_nonempty(
@@ -4099,7 +4099,7 @@ mod tests {
                     .build(),
             ),
             (
-                // `_ in _ is _` in the policy condition is an error in the text->CST parser 
+                // `_ in _ is _` in the policy condition is an error in the text->CST parser
                 r#"permit(principal, action, resource) when { principal in Group::"friends" is User };"#,
                 ExpectedErrorMessageBuilder::error("unexpected token `is`")
                     .exactly_one_underline_with_label(r#"is"#, "expected `!=`, `&&`, `<`, `<=`, `==`, `>`, `>=`, `||`, `}`, or `in`")

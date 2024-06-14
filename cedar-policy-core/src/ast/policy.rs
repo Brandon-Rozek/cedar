@@ -1583,8 +1583,6 @@ impl PrincipalOrResourceConstraint {
     }
 
     /// Get an iterator over all of the entity type names in this constraint.
-    /// The Unspecified entity type does not have a `Name`, so it is excluded
-    /// from this iter.
     pub fn iter_entity_type_names(&self) -> impl Iterator<Item = &'_ EntityType> {
         self.get_euid()
             .into_iter()
@@ -1669,8 +1667,6 @@ impl ActionConstraint {
     }
 
     /// Get an iterator over all of the entity types in this constraint.
-    /// The Unspecified entity type does not have a `Name`, so it is excluded
-    /// from this iter.
     pub fn iter_entity_type_names(&self) -> impl Iterator<Item = &'_ EntityType> {
         self.iter_euids().map(|euid| euid.entity_type())
     }

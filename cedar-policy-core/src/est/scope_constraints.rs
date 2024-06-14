@@ -566,7 +566,7 @@ impl TryFrom<PrincipalConstraint> for ast::PrincipalOrResourceConstraint {
                 entity_type,
                 in_entity,
             }) => ast::Name::from_normalized_str(entity_type.as_str())
-                .map(ast::EntityType::new)
+                .map(ast::EntityType::from)
                 .map_err(Self::Error::InvalidEntityType)
                 .and_then(|entity_type| {
                     Ok(match in_entity {
@@ -632,7 +632,7 @@ impl TryFrom<ResourceConstraint> for ast::PrincipalOrResourceConstraint {
                 entity_type,
                 in_entity,
             }) => ast::Name::from_normalized_str(entity_type.as_str())
-                .map(ast::EntityType::new)
+                .map(ast::EntityType::from)
                 .map_err(Self::Error::InvalidEntityType)
                 .and_then(|entity_type| {
                     Ok(match in_entity {

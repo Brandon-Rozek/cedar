@@ -82,8 +82,8 @@ pub fn is_authorized_json_str(json: &str) -> Result<String, serde_json::Error> {
 /// `PartialAuthorizationAnswer` types
 #[doc = include_str!("../../experimental_warning.md")]
 #[cfg(feature = "partial-eval")]
-pub fn is_authorized_partial(call: AuthorizationCall) -> PartialAuthorizationAnswer {
-    match call.get_components_partial() {
+pub fn is_authorized_partial(call: PartialAuthorizationCall) -> PartialAuthorizationAnswer {
+    match call.get_components() {
         WithWarnings {
             t: Ok((request, policies, entities)),
             warnings,
@@ -443,6 +443,44 @@ pub enum PartialAuthorizationAnswer {
 pub struct AuthorizationCall {
     /// The principal taking action
     #[cfg_attr(feature = "wasm", tsify(type = "{type: string, id: string}"))]
+    principal: JsonValueWithNoDuplicateKeys,
+    /// The action the principal is taking
+    #[cfg_attr(feature = "wasm", tsify(type = "{type: string, id: string}"))]
+    action: JsonValueWithNoDuplicateKeys,
+    /// The resource being acted on by the principal
+    #[cfg_attr(feature = "wasm", tsify(type = "{type: string, id: string}"))]
+    resource: JsonValueWithNoDuplicateKeys,
+    /// The context details specific to the request
+    #[serde_as(as = "MapPreventDuplicates<_, _>")]
+    #[cfg_attr(feature = "wasm", tsify(type = "Record<string, CedarValueJson>"))]
+    /// The context details specific to the request
+    context: HashMap<String, JsonValueWithNoDuplicateKeys>,
+    /// Optional schema.
+    /// If present, this will inform the parsing: for instance, it will allow
+    /// `__entity` and `__extn` escapes to be implicit, and it will error if
+    /// attributes have the wrong types (e.g., string instead of integer).
+    #[cfg_attr(feature = "wasm", tsify(optional, type = "Schema"))]
+    schema: Option<Schema>,
+    /// If this is `true` and a schema is provided, perform request validation.
+    /// If this is `false`, the schema will only be used for schema-based
+    /// parsing of `context`, and not for request validation.
+    /// If a schema is not provided, this option has no effect.
+    #[serde(default = "constant_true")]
+    validate_request: bool,
+    /// The slice containing entities and policies
+    slice: RecvdSlice,
+}
+
+/// Struct containing the input data for partial authorization
+#[cfg(feature = "partial-eval")]
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
+pub struct PartialAuthorizationCall {
+    /// The principal taking action
+    #[cfg_attr(feature = "wasm", tsify(type = "{type: string, id: string}"))]
     principal: Option<JsonValueWithNoDuplicateKeys>,
     /// The action the principal is taking
     #[cfg_attr(feature = "wasm", tsify(type = "{type: string, id: string}"))]
@@ -478,23 +516,18 @@ fn constant_true() -> bool {
 /// Parses the given JSON into an [`EntityUid`], or if it fails, adds an
 /// appropriate error to `errs` and returns `None`.
 fn parse_entity_uid(
-    entity_uid_json: Option<JsonValueWithNoDuplicateKeys>,
+    entity_uid_json: JsonValueWithNoDuplicateKeys,
     category: &str,
     errs: &mut Vec<miette::Report>,
 ) -> Option<EntityUid> {
-    if let Some(entity_uid_json) = entity_uid_json {
-        match EntityUid::from_json(entity_uid_json.into())
-            .wrap_err_with(|| format!("Failed to parse {category}"))
-        {
-            Ok(euid) => Some(euid),
-            Err(e) => {
-                errs.push(e);
-                None
-            }
+    match EntityUid::from_json(entity_uid_json.into())
+        .wrap_err_with(|| format!("Failed to parse {category}"))
+    {
+        Ok(euid) => Some(euid),
+        Err(e) => {
+            errs.push(e);
+            None
         }
-    } else {
-        errs.push(miette!("Missing `{category}` in request"));
-        None
     }
 }
 
@@ -594,9 +627,11 @@ impl AuthorizationCall {
             },
         }
     }
+}
 
-    #[cfg(feature = "partial-eval")]
-    fn get_components_partial(
+#[cfg(feature = "partial-eval")]
+impl PartialAuthorizationCall {
+    fn get_components(
         self,
     ) -> WithWarnings<Result<(Request, crate::PolicySet, Entities), Vec<miette::Report>>> {
         let mut errs = vec![];
@@ -619,8 +654,7 @@ impl AuthorizationCall {
         // Only attempt to parse principal if it's present.
         // If it's missing, it's an unknown and not an error.
         if let Some(principal_json) = self.principal {
-            if let Some(principal) = parse_entity_uid(Some(principal_json), "principal", &mut errs)
-            {
+            if let Some(principal) = parse_entity_uid(principal_json, "principal", &mut errs) {
                 b = b.principal(principal);
             }
         }
@@ -628,7 +662,7 @@ impl AuthorizationCall {
         // If the action exists, use it to parse context, otherwise don't
         let context = match self.action {
             Some(action_json) => {
-                let action = parse_entity_uid(Some(action_json), "action", &mut errs);
+                let action = parse_entity_uid(action_json, "action", &mut errs);
                 let context =
                     parse_context(self.context, schema.as_ref(), action.as_ref(), &mut errs);
                 if let Some(action) = action {
@@ -640,7 +674,7 @@ impl AuthorizationCall {
         };
 
         if let Some(resource_json) = self.resource {
-            if let Some(resource) = parse_entity_uid(Some(resource_json), "resource", &mut errs) {
+            if let Some(resource) = parse_entity_uid(resource_json, "resource", &mut errs) {
                 b = b.resource(resource);
             }
         }
@@ -1017,7 +1051,7 @@ mod test {
             }
         });
 
-        let msg = "Missing `principal` in request";
+        let msg = "Failed to parse principal";
         assert_is_authorized_json_is_failure(call, msg);
     }
 

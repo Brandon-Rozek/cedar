@@ -69,7 +69,7 @@ impl<'a> entities::Schema for CoreSchema<'a> {
                 .entity_types()
                 .filter_map(move |(entity_type, _)| {
                     if entity_type.name().basename() == basename {
-                        Some(ast::EntityType::new(entity_type.name().clone()))
+                        Some(ast::EntityType::from(entity_type.name().clone()))
                     } else {
                         None
                     }
@@ -452,11 +452,11 @@ mod test {
         assert_matches!(
             ast::Request::new_with_unknowns(
                 ast::EntityUIDEntry::Unknown { loc: None },
-                ast::EntityUIDEntry::concrete(
+                ast::EntityUIDEntry::known(
                     ast::EntityUID::with_eid_and_type("Action", "view_photo").unwrap(),
                     None,
                 ),
-                ast::EntityUIDEntry::concrete(
+                ast::EntityUIDEntry::known(
                     ast::EntityUID::with_eid_and_type("Photo", "vacationphoto94.jpg").unwrap(),
                     None,
                 ),
@@ -473,12 +473,12 @@ mod test {
     fn success_action_unknown() {
         assert_matches!(
             ast::Request::new_with_unknowns(
-                ast::EntityUIDEntry::concrete(
+                ast::EntityUIDEntry::known(
                     ast::EntityUID::with_eid_and_type("User", "abc123").unwrap(),
                     None,
                 ),
                 ast::EntityUIDEntry::Unknown { loc: None },
-                ast::EntityUIDEntry::concrete(
+                ast::EntityUIDEntry::known(
                     ast::EntityUID::with_eid_and_type("Photo", "vacationphoto94.jpg").unwrap(),
                     None,
                 ),
@@ -495,11 +495,11 @@ mod test {
     fn success_resource_unknown() {
         assert_matches!(
             ast::Request::new_with_unknowns(
-                ast::EntityUIDEntry::concrete(
+                ast::EntityUIDEntry::known(
                     ast::EntityUID::with_eid_and_type("User", "abc123").unwrap(),
                     None,
                 ),
-                ast::EntityUIDEntry::concrete(
+                ast::EntityUIDEntry::known(
                     ast::EntityUID::with_eid_and_type("Action", "view_photo").unwrap(),
                     None,
                 ),
@@ -517,15 +517,15 @@ mod test {
     fn success_context_unknown() {
         assert_matches!(
             ast::Request::new_with_unknowns(
-                ast::EntityUIDEntry::concrete(
+                ast::EntityUIDEntry::known(
                     ast::EntityUID::with_eid_and_type("User", "abc123").unwrap(),
                     None,
                 ),
-                ast::EntityUIDEntry::concrete(
+                ast::EntityUIDEntry::known(
                     ast::EntityUID::with_eid_and_type("Action", "view_photo").unwrap(),
                     None,
                 ),
-                ast::EntityUIDEntry::concrete(
+                ast::EntityUIDEntry::known(
                     ast::EntityUID::with_eid_and_type("Photo", "vacationphoto94.jpg").unwrap(),
                     None,
                 ),
@@ -560,12 +560,12 @@ mod test {
     fn success_unknown_action_but_invalid_types() {
         assert_matches!(
             ast::Request::new_with_unknowns(
-                ast::EntityUIDEntry::concrete(
+                ast::EntityUIDEntry::known(
                     ast::EntityUID::with_eid_and_type("Album", "abc123").unwrap(),
                     None,
                 ),
                 ast::EntityUIDEntry::Unknown { loc: None },
-                ast::EntityUIDEntry::concrete(
+                ast::EntityUIDEntry::known(
                     ast::EntityUID::with_eid_and_type("User", "alice").unwrap(),
                     None,
                 ),
@@ -608,7 +608,7 @@ mod test {
                 Extensions::all_available(),
             ),
             Err(RequestValidationError::UndeclaredPrincipalType { principal_ty }) => {
-                assert_eq!(principal_ty, ast::EntityType::new(ast::Name::parse_unqualified_name("Foo").unwrap()));
+                assert_eq!(principal_ty, ast::EntityType::from(ast::Name::parse_unqualified_name("Foo").unwrap()));
             }
         );
     }
@@ -626,7 +626,7 @@ mod test {
                 Extensions::all_available(),
             ),
             Err(RequestValidationError::UndeclaredResourceType { resource_ty }) => {
-                assert_eq!(resource_ty, ast::EntityType::new(ast::Name::parse_unqualified_name("Foo").unwrap()));
+                assert_eq!(resource_ty, ast::EntityType::from(ast::Name::parse_unqualified_name("Foo").unwrap()));
             }
         );
     }
@@ -644,7 +644,7 @@ mod test {
                 Extensions::all_available(),
             ),
             Err(RequestValidationError::InvalidPrincipalType { principal_ty, action }) => {
-                assert_eq!(principal_ty, ast::EntityType::new(ast::Name::parse_unqualified_name("Album").unwrap()));
+                assert_eq!(principal_ty, ast::EntityType::from(ast::Name::parse_unqualified_name("Album").unwrap()));
                 assert_eq!(&*action, &ast::EntityUID::with_eid_and_type("Action", "view_photo").unwrap());
             }
         );
@@ -663,7 +663,7 @@ mod test {
                 Extensions::all_available(),
             ),
             Err(RequestValidationError::InvalidResourceType { resource_ty, action }) => {
-                assert_eq!(resource_ty, ast::EntityType::new(ast::Name::parse_unqualified_name("Group").unwrap()));
+                assert_eq!(resource_ty, ast::EntityType::from(ast::Name::parse_unqualified_name("Group").unwrap()));
                 assert_eq!(&*action, &ast::EntityUID::with_eid_and_type("Action", "view_photo").unwrap());
             }
         );
