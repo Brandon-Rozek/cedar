@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::convert::Infallible;
 use std::str::FromStr;
+use thiserror::Error;
 
 /// Identifier portion of the [`EntityUid`] type.
 ///
@@ -134,12 +135,6 @@ impl EntityTypeName {
     pub fn namespace(&self) -> String {
         self.0.namespace()
     }
-
-    /// Construct an [`EntityTypeName`] from the internal type.
-    /// This function is only intended to be used internally.
-    pub(crate) fn new(ty: ast::Name) -> Self {
-        Self(ty)
-    }
 }
 
 /// This `FromStr` implementation requires the _normalized_ representation of the
@@ -149,7 +144,7 @@ impl FromStr for EntityTypeName {
 
     fn from_str(namespace_type_str: &str) -> Result<Self, Self::Err> {
         ast::Name::from_normalized_str(namespace_type_str)
-            .map(Self::new)
+            .map(Into::into)
             .map_err(Into::into)
     }
 }
@@ -159,6 +154,29 @@ impl std::fmt::Display for EntityTypeName {
         write!(f, "{}", self.0)
     }
 }
+
+#[doc(hidden)]
+impl From<ast::Name> for EntityTypeName {
+    fn from(value: ast::Name) -> Self {
+        Self(value)
+    }
+}
+
+#[doc(hidden)]
+impl TryFrom<ast::EntityType> for EntityTypeName {
+    type Error = UnspecifiedCannotBeConvertedToEntityTypeName;
+    fn try_from(value: ast::EntityType) -> Result<Self, Self::Error> {
+        match value {
+            ast::EntityType::Specified(name) => Ok(name.into()),
+            ast::EntityType::Unspecified => Err(UnspecifiedCannotBeConvertedToEntityTypeName),
+        }
+    }
+}
+
+#[doc(hidden)]
+#[derive(Debug, Error)]
+#[error("`Unspecified` cannot be converted to `EntityTypeName`")]
+pub struct UnspecifiedCannotBeConvertedToEntityTypeName;
 
 /// Unique id for an entity, such as `User::"alice"`.
 ///
@@ -232,9 +250,9 @@ impl EntityUid {
     pub fn from_json(json: serde_json::Value) -> Result<Self, impl miette::Diagnostic> {
         let parsed: cedar_policy_core::entities::EntityUidJson = serde_json::from_value(json)?;
         // INVARIANT: There is no way to write down the unspecified entityuid
-        Ok::<Self, JsonDeserializationError>(Self::new(
-            parsed.into_euid(|| JsonDeserializationErrorContext::EntityUid)?,
-        ))
+        Ok::<Self, JsonDeserializationError>(
+            parsed.into_euid(|| JsonDeserializationErrorContext::EntityUid)?.into(),
+        )
     }
 
     /// Testing utility for creating `EntityUids` a bit easier
@@ -244,12 +262,6 @@ impl EntityUid {
             EntityTypeName::from_str(typename).unwrap(),
             EntityId::from_str(id).unwrap(),
         )
-    }
-
-    /// Construct an [`EntityUid`] from the internal type.
-    /// This function is only intended to be used internally.
-    pub(crate) fn new(uid: ast::EntityUID) -> Self {
-        Self(uid)
     }
 }
 
@@ -282,7 +294,7 @@ impl FromStr for EntityUid {
     fn from_str(uid_str: &str) -> Result<Self, Self::Err> {
         // INVARIANT there is no way to write down the unspecified entity
         ast::EntityUID::from_normalized_str(uid_str)
-            .map(Self::new)
+            .map(Into::into)
             .map_err(Into::into)
     }
 }
@@ -304,6 +316,13 @@ impl AsRef<ast::EntityUID> for EntityUid {
 impl From<EntityUid> for ast::EntityUID {
     fn from(uid: EntityUid) -> Self {
         uid.0
+    }
+}
+
+#[doc(hidden)]
+impl From<ast::EntityUID> for EntityUid {
+    fn from(uid : ast::EntityUID) -> Self {
+        Self(uid)
     }
 }
 
