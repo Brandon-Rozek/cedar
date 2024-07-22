@@ -55,3 +55,5 @@ mod value;
 pub use value::*;
 mod expr_iterator;
 pub use expr_iterator::*;
+mod expr_cse;
+pub use expr_cse::*;
