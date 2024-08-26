@@ -17,6 +17,9 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+#[cfg(feature = "protobuffers")]
+use crate::ast::proto;
+
 /// Represents a source location: index/range, and a reference to the source
 /// code which that index/range indexes into
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, PartialOrd, Ord)]
@@ -60,5 +63,32 @@ impl Loc {
     /// `src`)
     pub fn snippet(&self) -> Option<&str> {
         self.src.get(self.start()..self.end())
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::Loc> for Loc {
+    fn from(v: &proto::Loc) -> Self {
+        let offset_usize: usize = v.offset.try_into().unwrap();
+        Loc::new(
+            miette::SourceSpan::new(
+                miette::SourceOffset::from(offset_usize),
+                v.length.try_into().unwrap(),
+            ),
+            v.src.clone().into(),
+        )
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Loc> for proto::Loc {
+    fn from(v: &Loc) -> Self {
+        let offset_u32: u32 = v.span.offset().try_into().unwrap();
+        let length_u32: u32 = v.span.len().try_into().unwrap();
+        Self {
+            offset: offset_u32,
+            length: length_u32,
+            src: v.src.to_string(),
+        }
     }
 }

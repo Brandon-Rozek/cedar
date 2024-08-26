@@ -16,6 +16,8 @@
 
 fn main() {
     generate_parsers();
+    #[cfg(feature = "protobuffers")]
+    generate_schemas();
 }
 
 /// Reads parser grammar files (.lalrpop) and generates Rust modules
@@ -25,4 +27,17 @@ fn generate_parsers() {
     lalrpop::Configuration::new()
         .process_dir("src/human_schema/")
         .expect("parser synth");
+}
+
+#[cfg(feature = "protobuffers")]
+/// Reads protobuf schema files (.proto) and generates Rust modules
+fn generate_schemas() {
+    let mut config = prost_build::Config::new();
+    config.extern_path(".cedar_policy_core", "cedar_policy-core::ast::proto");
+    config
+        .compile_protos(
+            &["./schema/Validator.proto"],
+            &["./schema", "../cedar-policy-core/schema"],
+        )
+        .expect("Prost protobuf compilation error;");
 }

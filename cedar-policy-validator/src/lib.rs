@@ -17,6 +17,12 @@
 //! Validator for Cedar policies
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "protobuffers")]
+pub mod proto {
+    #![allow(missing_docs)]
+    include!(concat!(env!("OUT_DIR"), "/cedar_policy_validator.rs"));
+}
+
 use cedar_policy_core::ast::{Policy, PolicySet, Template};
 use serde::Serialize;
 use std::collections::HashSet;
@@ -73,6 +79,26 @@ impl ValidationMode {
             ValidationMode::Permissive => false,
             #[cfg(feature = "partial-validate")]
             ValidationMode::Partial => false,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&ValidationMode> for proto::ValidationMode {
+    fn from(v: &ValidationMode) -> Self {
+        match v {
+            ValidationMode::Strict => proto::ValidationMode::Strict,
+            ValidationMode::Permissive => proto::ValidationMode::Permissive,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::ValidationMode> for ValidationMode {
+    fn from(v: &proto::ValidationMode) -> Self {
+        match v {
+            proto::ValidationMode::Strict => ValidationMode::Strict,
+            proto::ValidationMode::Permissive => ValidationMode::Permissive,
         }
     }
 }

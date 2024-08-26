@@ -25,6 +25,12 @@ use std::collections::{hash_map::Entry, HashMap, HashSet};
 use std::{borrow::Borrow, sync::Arc};
 use thiserror::Error;
 
+#[cfg(feature = "protobuffers")]
+use crate::ast::proto;
+
+#[cfg(feature = "protobuffers")]
+use super::TemplateBody;
+
 /// Represents a set of `Policy`s
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "LiteralPolicySet")]
@@ -106,6 +112,94 @@ impl From<PolicySet> for LiteralPolicySet {
             .map(|(id, p)| (id, p.into()))
             .collect();
         Self { templates, links }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::LiteralPolicySet> for LiteralPolicySet {
+    fn from(v: &proto::LiteralPolicySet) -> Self {
+        let templates: HashMap<PolicyID, Template> = v
+            .templates
+            .iter()
+            .map(|(key, value)| {
+                (
+                    PolicyID::from_string(key),
+                    Template::from(TemplateBody::from(value)),
+                )
+            })
+            .collect();
+
+        let links: HashMap<PolicyID, LiteralPolicy> = v
+            .links
+            .iter()
+            .map(|(key, value)| (PolicyID::from_string(key), LiteralPolicy::from(value)))
+            .collect();
+
+        Self {
+            templates: templates,
+            links: links,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&LiteralPolicySet> for proto::LiteralPolicySet {
+    fn from(v: &LiteralPolicySet) -> Self {
+        let mut templates: HashMap<String, proto::TemplateBody> =
+            HashMap::with_capacity(v.templates.len());
+        for (key, value) in &v.templates {
+            templates.insert(String::from(key.as_ref()), proto::TemplateBody::from(value));
+        }
+
+        let mut links: HashMap<String, proto::LiteralPolicy> =
+            HashMap::with_capacity(v.links.len());
+        for (key, value) in &v.links {
+            links.insert(
+                String::from(key.as_ref()),
+                proto::LiteralPolicy::from(value),
+            );
+        }
+
+        Self {
+            templates: templates,
+            links: links,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&PolicySet> for proto::LiteralPolicySet {
+    fn from(v: &PolicySet) -> Self {
+        let mut templates: HashMap<String, proto::TemplateBody> =
+            HashMap::with_capacity(v.templates.len());
+        for (key, value) in &v.templates {
+            templates.insert(
+                String::from(key.as_ref()),
+                proto::TemplateBody::from(value.as_ref()),
+            );
+        }
+
+        let mut links: HashMap<String, proto::LiteralPolicy> =
+            HashMap::with_capacity(v.links.len());
+        for (key, value) in &v.links {
+            links.insert(
+                String::from(key.as_ref()),
+                proto::LiteralPolicy::from(value),
+            );
+        }
+
+        Self {
+            templates: templates,
+            links: links,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl TryFrom<&proto::LiteralPolicySet> for PolicySet {
+    type Error = ReificationError;
+    fn try_from(pset: &proto::LiteralPolicySet) -> Result<Self, Self::Error> {
+        PolicySet::try_from(LiteralPolicySet::from(pset))
     }
 }
 

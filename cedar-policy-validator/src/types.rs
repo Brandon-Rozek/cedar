@@ -36,6 +36,12 @@ use cedar_policy_core::{
 
 use crate::{LubHelp, ValidationMode};
 
+#[cfg(feature = "protobuffers")]
+use crate::proto;
+
+#[cfg(feature = "protobuffers")]
+use cedar_policy_core::ast;
+
 use super::schema::{
     is_action_entity_type, ValidatorActionId, ValidatorEntityType, ValidatorSchema,
 };
@@ -843,6 +849,82 @@ impl Display for Type {
     }
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&proto::Type> for Type {
+    fn from(v: &proto::Type) -> Self {
+        match v.data.as_ref().unwrap() {
+            proto::r#type::Data::Ty(vt) => {
+                match proto::r#type::Ty::try_from(vt.to_owned()).unwrap() {
+                    proto::r#type::Ty::Never => Type::Never,
+                    proto::r#type::Ty::True => Type::True,
+                    proto::r#type::Ty::False => Type::False,
+                    proto::r#type::Ty::EmptySetType => Type::Set { element_type: None },
+                    proto::r#type::Ty::Bool => Type::Primitive {
+                        primitive_type: Primitive::Bool,
+                    },
+                    proto::r#type::Ty::String => Type::Primitive {
+                        primitive_type: Primitive::String,
+                    },
+                    proto::r#type::Ty::Long => Type::Primitive {
+                        primitive_type: Primitive::Long,
+                    },
+                }
+            }
+            proto::r#type::Data::SetType(tt) => Type::Set {
+                element_type: Some(Box::new(Type::from(tt.as_ref()))),
+            },
+            proto::r#type::Data::EntityOrRecord(er) => {
+                Type::EntityOrRecord(EntityRecordKind::from(er))
+            }
+            proto::r#type::Data::Name(name) => Type::ExtensionType {
+                name: ast::Name::from(name),
+            },
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Type> for proto::Type {
+    fn from(v: &Type) -> Self {
+        match v {
+            Type::Never => Self {
+                data: Some(proto::r#type::Data::Ty(proto::r#type::Ty::Never.into())),
+            },
+            Type::True => Self {
+                data: Some(proto::r#type::Data::Ty(proto::r#type::Ty::True.into())),
+            },
+
+            Type::False => Self {
+                data: Some(proto::r#type::Data::Ty(proto::r#type::Ty::False.into())),
+            },
+            Type::Primitive { primitive_type } => match primitive_type {
+                Primitive::Bool => Self {
+                    data: Some(proto::r#type::Data::Ty(proto::r#type::Ty::Bool.into())),
+                },
+                Primitive::Long => Self {
+                    data: Some(proto::r#type::Data::Ty(proto::r#type::Ty::Long.into())),
+                },
+                Primitive::String => Self {
+                    data: Some(proto::r#type::Data::Ty(proto::r#type::Ty::String.into())),
+                },
+            },
+            Type::Set { element_type } => Self {
+                data: Some(proto::r#type::Data::SetType(Box::new(proto::Type::from(
+                    element_type.as_ref().unwrap().as_ref(),
+                )))),
+            },
+            Type::EntityOrRecord(er) => Self {
+                data: Some(proto::r#type::Data::EntityOrRecord(
+                    proto::EntityRecordKind::from(er),
+                )),
+            },
+            Type::ExtensionType { name } => Self {
+                data: Some(proto::r#type::Data::Name(ast::proto::Name::from(name))),
+            },
+        }
+    }
+}
+
 impl TryFrom<Type> for cedar_policy_core::entities::SchemaType {
     type Error = String;
     fn try_from(ty: Type) -> Result<cedar_policy_core::entities::SchemaType, String> {
@@ -1181,6 +1263,29 @@ impl IntoIterator for Attributes {
     }
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&proto::Attributes> for Attributes {
+    fn from(v: &proto::Attributes) -> Self {
+        Self::with_attributes(
+            v.attrs
+                .iter()
+                .map(|(k, v)| (k.into(), AttributeType::from(v))),
+        )
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Attributes> for proto::Attributes {
+    fn from(v: &Attributes) -> Self {
+        Self {
+            attrs: v
+                .iter()
+                .map(|(k, v)| (k.to_string(), proto::AttributeType::from(v)))
+                .collect(),
+        }
+    }
+}
+
 /// Used to tag record types to indicate if their attributes record is open or
 /// closed.
 #[derive(Hash, Ord, PartialOrd, Eq, PartialEq, Debug, Copy, Clone, Serialize)]
@@ -1198,6 +1303,26 @@ impl OpenTag {
         match self {
             OpenTag::OpenAttributes => true,
             OpenTag::ClosedAttributes => false,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::OpenTag> for OpenTag {
+    fn from(v: &proto::OpenTag) -> Self {
+        match v {
+            proto::OpenTag::OpenAttributes => OpenTag::OpenAttributes,
+            proto::OpenTag::ClosedAttributes => OpenTag::ClosedAttributes,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&OpenTag> for proto::OpenTag {
+    fn from(v: &OpenTag) -> Self {
+        match v {
+            OpenTag::OpenAttributes => proto::OpenTag::OpenAttributes,
+            OpenTag::ClosedAttributes => proto::OpenTag::ClosedAttributes,
         }
     }
 }
@@ -1478,6 +1603,66 @@ impl EntityRecordKind {
     }
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&proto::EntityRecordKind> for EntityRecordKind {
+    fn from(v: &proto::EntityRecordKind) -> Self {
+        match v.data.as_ref().unwrap() {
+            proto::entity_record_kind::Data::Ty(ty) => {
+                match proto::entity_record_kind::Ty::try_from(ty.to_owned()).unwrap() {
+                    proto::entity_record_kind::Ty::AnyEntity => Self::AnyEntity,
+                }
+            }
+            proto::entity_record_kind::Data::Record(p_record) => Self::Record {
+                attrs: Attributes::from(p_record.attrs.as_ref().unwrap()),
+                open_attributes: OpenTag::from(
+                    &proto::OpenTag::try_from(p_record.open_attributes).unwrap(),
+                ),
+            },
+            proto::entity_record_kind::Data::Entity(p_entity) => Self::Entity(
+                EntityLUB::single_entity(ast::Name::from(p_entity.e.as_ref().unwrap())),
+            ),
+            proto::entity_record_kind::Data::ActionEntity(p_action_entity) => Self::ActionEntity {
+                name: ast::Name::from(p_action_entity.name.as_ref().unwrap()),
+                attrs: Attributes::from(p_action_entity.attrs.as_ref().unwrap()),
+            },
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&EntityRecordKind> for proto::EntityRecordKind {
+    fn from(v: &EntityRecordKind) -> Self {
+        let data = match v {
+            EntityRecordKind::Record {
+                attrs,
+                open_attributes,
+            } => proto::entity_record_kind::Data::Record(proto::entity_record_kind::Record {
+                attrs: Some(proto::Attributes::from(attrs)),
+                open_attributes: proto::OpenTag::from(open_attributes).into(),
+            }),
+            EntityRecordKind::AnyEntity => {
+                proto::entity_record_kind::Data::Ty(proto::entity_record_kind::Ty::AnyEntity.into())
+            }
+            EntityRecordKind::Entity(e) => {
+                proto::entity_record_kind::Data::Entity(proto::entity_record_kind::Entity {
+                    e: Some(ast::proto::Name::from(
+                        &e.clone().into_single_entity().unwrap(),
+                    )),
+                })
+            }
+            EntityRecordKind::ActionEntity { name, attrs } => {
+                proto::entity_record_kind::Data::ActionEntity(
+                    proto::entity_record_kind::ActionEntity {
+                        name: Some(ast::proto::Name::from(name)),
+                        attrs: Some(proto::Attributes::from(attrs)),
+                    },
+                )
+            }
+        };
+        Self { data: Some(data) }
+    }
+}
+
 /// Contains the type of a record attribute and if the attribute is required.
 #[derive(Hash, Ord, PartialOrd, Eq, PartialEq, Debug, Clone, Serialize)]
 pub struct AttributeType {
@@ -1505,6 +1690,26 @@ impl AttributeType {
     /// the type of the attribute.
     pub fn required_attribute(attr_type: Type) -> Self {
         Self::new(attr_type, true)
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::AttributeType> for AttributeType {
+    fn from(v: &proto::AttributeType) -> Self {
+        Self {
+            attr_type: Type::from(v.attr_type.as_ref().unwrap()),
+            is_required: v.is_required,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&AttributeType> for proto::AttributeType {
+    fn from(v: &AttributeType) -> Self {
+        Self {
+            attr_type: Some(proto::Type::from(&v.attr_type)),
+            is_required: v.is_required,
+        }
     }
 }
 

@@ -50,3 +50,9 @@ mod value;
 pub use value::*;
 mod expr_iterator;
 pub use expr_iterator::*;
+
+#[cfg(feature = "protobuffers")]
+pub mod proto {
+    #![allow(missing_docs)]
+    include!(concat!(env!("OUT_DIR"), "/cedar_policy_core.rs"));
+}

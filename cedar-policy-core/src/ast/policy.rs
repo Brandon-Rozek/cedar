@@ -567,6 +567,100 @@ pub struct LiteralPolicy {
     values: SlotEnv,
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&proto::LiteralPolicy> for LiteralPolicy {
+    fn from(v: &proto::LiteralPolicy) -> Self {
+        let link_id: &str = v.link_id.as_ref();
+        let link: Option<PolicyID> = if v.link_id_specified {
+            Some(PolicyID::from_string(link_id))
+        } else {
+            None
+        };
+
+        let mut values: SlotEnv = HashMap::new();
+        if v.principal_euid.is_some() {
+            values.insert(
+                SlotId::principal(),
+                EntityUID::from(v.principal_euid.as_ref().unwrap()),
+            );
+        }
+        if v.resource_euid.is_some() {
+            values.insert(
+                SlotId::resource(),
+                EntityUID::from(v.resource_euid.as_ref().unwrap()),
+            );
+        }
+
+        let template_id: &str = v.template_id.as_ref();
+
+        Self {
+            template_id: PolicyID::from_string(template_id),
+            link_id: link,
+            values: values,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&LiteralPolicy> for proto::LiteralPolicy {
+    fn from(v: &LiteralPolicy) -> Self {
+        let template_id_str: &str = v.template_id.as_ref();
+        let link_id_str: &str = match v.link_id {
+            Some(ref pid) => pid.as_ref(),
+            None => "",
+        };
+
+        // Are both principal and resource ids necessary
+        let principal_euid: Option<proto::EntityUid> = v
+            .values
+            .get(&SlotId::principal())
+            .map(proto::EntityUid::from);
+
+        let resource_euid: Option<proto::EntityUid> = v
+            .values
+            .get(&SlotId::resource())
+            .map(proto::EntityUid::from);
+
+        Self {
+            template_id: String::from(template_id_str),
+            link_id: String::from(link_id_str),
+            link_id_specified: v.link_id.is_some(),
+            principal_euid: principal_euid,
+            resource_euid: resource_euid,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Policy> for proto::LiteralPolicy {
+    fn from(v: &Policy) -> Self {
+        let template_id_str: &str = v.template.id().as_ref();
+        let link_id_str: &str = match v.link {
+            Some(ref pid) => pid.as_ref(),
+            None => "",
+        };
+
+        // Are both principal and resource ids necessary
+        let principal_euid: Option<proto::EntityUid> = v
+            .values
+            .get(&SlotId::principal())
+            .map(proto::EntityUid::from);
+
+        let resource_euid: Option<proto::EntityUid> = v
+            .values
+            .get(&SlotId::resource())
+            .map(proto::EntityUid::from);
+
+        Self {
+            template_id: String::from(template_id_str),
+            link_id: String::from(link_id_str),
+            link_id_specified: v.link.is_some(),
+            principal_euid: principal_euid,
+            resource_euid: resource_euid,
+        }
+    }
+}
+
 /// A borrowed version of LiteralPolicy exclusively for serialization
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BorrowedLiteralPolicy<'a> {
@@ -1088,6 +1182,74 @@ impl std::fmt::Display for TemplateBody {
     }
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&proto::TemplateBody> for Template {
+    fn from(v: &proto::TemplateBody) -> Self {
+        Template::from(TemplateBody::from(v))
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::TemplateBody> for TemplateBody {
+    fn from(v: &proto::TemplateBody) -> Self {
+        let loc: Option<Loc> = v.loc.as_ref().map(Loc::from);
+        let annotations: Annotations = Annotations::from_iter(
+            v.annotations
+                .iter()
+                .map(|(key, value)| (AnyId::new_unchecked(key), Annotation::from(value))),
+        );
+        let effect = Effect::from(&proto::Effect::try_from(v.effect).unwrap());
+        let policy_id: &str = v.id.as_ref();
+
+        let body: TemplateBody = TemplateBody::new(
+            PolicyID::from_string(policy_id),
+            loc,
+            annotations,
+            effect,
+            PrincipalConstraint::from(v.principal_constraint.as_ref().unwrap()),
+            ActionConstraint::from(v.action_constraint.as_ref().unwrap()),
+            ResourceConstraint::from(v.resource_constraint.as_ref().unwrap()),
+            Expr::from(v.non_scope_constraints.as_ref().unwrap()),
+        );
+        body
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&TemplateBody> for proto::TemplateBody {
+    fn from(v: &TemplateBody) -> Self {
+        let id_str: &str = v.id.as_ref();
+        let loc: Option<proto::Loc> = v.loc.as_ref().map(proto::Loc::from);
+        let annotations: HashMap<String, proto::Annotation> = v
+            .annotations
+            .as_ref()
+            .iter()
+            .map(|(key, value)| {
+                let id_str: &str = key.as_ref();
+                (String::from(id_str), proto::Annotation::from(value))
+            })
+            .collect();
+
+        Self {
+            id: String::from(id_str),
+            loc: loc,
+            annotations: annotations,
+            effect: proto::Effect::from(&v.effect).into(),
+            principal_constraint: Some(proto::PrincipalConstraint::from(&v.principal_constraint)),
+            action_constraint: Some(proto::ActionConstraint::from(&v.action_constraint)),
+            resource_constraint: Some(proto::ResourceConstraint::from(&v.resource_constraint)),
+            non_scope_constraints: Some(proto::Expr::from(v.non_scope_constraints.as_ref())),
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Template> for proto::TemplateBody {
+    fn from(v: &Template) -> Self {
+        proto::TemplateBody::from(&v.body)
+    }
+}
+
 /// Struct which holds the annotations for a policy
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, PartialOrd, Ord, Debug)]
 pub struct Annotations(BTreeMap<AnyId, Annotation>);
@@ -1162,6 +1324,26 @@ pub struct Annotation {
 impl AsRef<str> for Annotation {
     fn as_ref(&self) -> &str {
         &self.val
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::Annotation> for Annotation {
+    fn from(v: &proto::Annotation) -> Self {
+        Self {
+            val: v.val.clone().into(),
+            loc: v.loc.as_ref().map(Loc::from),
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Annotation> for proto::Annotation {
+    fn from(v: &Annotation) -> Self {
+        Self {
+            val: v.val.to_string(),
+            loc: v.loc.as_ref().map(proto::Loc::from),
+        }
     }
 }
 
@@ -1258,6 +1440,24 @@ impl PrincipalConstraint {
                 constraint: PrincipalOrResourceConstraint::In(EntityReference::EUID(euid)),
             },
             _ => self,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::PrincipalConstraint> for PrincipalConstraint {
+    fn from(v: &proto::PrincipalConstraint) -> Self {
+        Self {
+            constraint: PrincipalOrResourceConstraint::from(v.constraint.as_ref().unwrap()),
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&PrincipalConstraint> for proto::PrincipalConstraint {
+    fn from(v: &PrincipalConstraint) -> Self {
+        Self {
+            constraint: Some(proto::PrincipalOrResourceConstraint::from(&v.constraint)),
         }
     }
 }
@@ -1369,6 +1569,24 @@ impl ResourceConstraint {
     }
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&proto::ResourceConstraint> for ResourceConstraint {
+    fn from(v: &proto::ResourceConstraint) -> Self {
+        Self {
+            constraint: PrincipalOrResourceConstraint::from(v.constraint.as_ref().unwrap()),
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&ResourceConstraint> for proto::ResourceConstraint {
+    fn from(v: &ResourceConstraint) -> Self {
+        Self {
+            constraint: Some(proto::PrincipalOrResourceConstraint::from(&v.constraint)),
+        }
+    }
+}
+
 impl std::fmt::Display for ResourceConstraint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -1403,6 +1621,40 @@ impl EntityReference {
         match self {
             EntityReference::EUID(euid) => Expr::val(euid.clone()),
             EntityReference::Slot => Expr::slot(slot),
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::EntityReference> for EntityReference {
+    fn from(v: &proto::EntityReference) -> Self {
+        match v.data.as_ref().unwrap() {
+            proto::entity_reference::Data::Ty(ty) => {
+                match proto::entity_reference::Ty::try_from(ty.to_owned()).unwrap() {
+                    proto::entity_reference::Ty::Slot => EntityReference::Slot,
+                }
+            }
+            proto::entity_reference::Data::Euid(euid) => {
+                EntityReference::euid(EntityUID::from(euid).into())
+            }
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&EntityReference> for proto::EntityReference {
+    fn from(v: &EntityReference) -> Self {
+        match v {
+            EntityReference::EUID(euid) => Self {
+                data: Some(proto::entity_reference::Data::Euid(proto::EntityUid::from(
+                    euid.as_ref(),
+                ))),
+            },
+            EntityReference::Slot => Self {
+                data: Some(proto::entity_reference::Data::Ty(
+                    proto::entity_reference::Ty::Slot.into(),
+                )),
+            },
         }
     }
 }
@@ -1599,6 +1851,79 @@ impl PrincipalOrResourceConstraint {
     }
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&proto::PrincipalOrResourceConstraint> for PrincipalOrResourceConstraint {
+    fn from(v: &proto::PrincipalOrResourceConstraint) -> Self {
+        match v.data.as_ref().unwrap() {
+            proto::principal_or_resource_constraint::Data::Ty(ty) => {
+                match proto::principal_or_resource_constraint::Ty::try_from(ty.to_owned()).unwrap()
+                {
+                    proto::principal_or_resource_constraint::Ty::Any => {
+                        PrincipalOrResourceConstraint::Any
+                    }
+                }
+            }
+            proto::principal_or_resource_constraint::Data::In(msg) => {
+                PrincipalOrResourceConstraint::In(EntityReference::from(msg.er.as_ref().unwrap()))
+            }
+            proto::principal_or_resource_constraint::Data::Eq(msg) => {
+                PrincipalOrResourceConstraint::Eq(EntityReference::from(msg.er.as_ref().unwrap()))
+            }
+            proto::principal_or_resource_constraint::Data::Is(msg) => {
+                PrincipalOrResourceConstraint::Is(Name::from(msg.name.as_ref().unwrap()))
+            }
+            proto::principal_or_resource_constraint::Data::IsIn(msg) => {
+                PrincipalOrResourceConstraint::IsIn(
+                    Name::from(msg.name.as_ref().unwrap()),
+                    EntityReference::from(msg.er.as_ref().unwrap()),
+                )
+            }
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&PrincipalOrResourceConstraint> for proto::PrincipalOrResourceConstraint {
+    fn from(v: &PrincipalOrResourceConstraint) -> Self {
+        match v {
+            PrincipalOrResourceConstraint::Any => Self {
+                data: Some(proto::principal_or_resource_constraint::Data::Ty(
+                    proto::principal_or_resource_constraint::Ty::Any.into(),
+                )),
+            },
+            PrincipalOrResourceConstraint::In(er) => Self {
+                data: Some(proto::principal_or_resource_constraint::Data::In(
+                    proto::principal_or_resource_constraint::InMessage {
+                        er: Some(proto::EntityReference::from(er)),
+                    },
+                )),
+            },
+            PrincipalOrResourceConstraint::Eq(er) => Self {
+                data: Some(proto::principal_or_resource_constraint::Data::Eq(
+                    proto::principal_or_resource_constraint::EqMessage {
+                        er: Some(proto::EntityReference::from(er)),
+                    },
+                )),
+            },
+            PrincipalOrResourceConstraint::Is(na) => Self {
+                data: Some(proto::principal_or_resource_constraint::Data::Is(
+                    proto::principal_or_resource_constraint::IsMessage {
+                        name: Some(proto::Name::from(na)),
+                    },
+                )),
+            },
+            PrincipalOrResourceConstraint::IsIn(na, er) => Self {
+                data: Some(proto::principal_or_resource_constraint::Data::IsIn(
+                    proto::principal_or_resource_constraint::IsInMessage {
+                        er: Some(proto::EntityReference::from(er)),
+                        name: Some(proto::Name::from(na)),
+                    },
+                )),
+            },
+        }
+    }
+}
+
 /// Constraint for action scope variables.
 /// Action variables can be constrained to be in any variable in a list.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, PartialOrd, Ord, Debug)]
@@ -1682,6 +2007,59 @@ impl ActionConstraint {
     }
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&proto::ActionConstraint> for ActionConstraint {
+    fn from(v: &proto::ActionConstraint) -> Self {
+        match v.data.as_ref().unwrap() {
+            proto::action_constraint::Data::Ty(ty) => {
+                match proto::action_constraint::Ty::try_from(ty.to_owned()).unwrap() {
+                    proto::action_constraint::Ty::Any => ActionConstraint::Any,
+                }
+            }
+            proto::action_constraint::Data::In(msg) => ActionConstraint::In(
+                msg.euids
+                    .iter()
+                    .map(|value| EntityUID::from(value).into())
+                    .collect(),
+            ),
+            proto::action_constraint::Data::Eq(msg) => {
+                ActionConstraint::Eq(EntityUID::from(msg.euid.as_ref().unwrap()).into())
+            }
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&ActionConstraint> for proto::ActionConstraint {
+    fn from(v: &ActionConstraint) -> Self {
+        match v {
+            ActionConstraint::Any => Self {
+                data: Some(proto::action_constraint::Data::Ty(
+                    proto::action_constraint::Ty::Any.into(),
+                )),
+            },
+            ActionConstraint::In(euids) => {
+                let mut peuids: Vec<proto::EntityUid> = Vec::with_capacity(euids.len());
+                for value in euids {
+                    peuids.push(proto::EntityUid::from(value.as_ref()));
+                }
+                Self {
+                    data: Some(proto::action_constraint::Data::In(
+                        proto::action_constraint::InMessage { euids: peuids },
+                    )),
+                }
+            }
+            ActionConstraint::Eq(euid) => Self {
+                data: Some(proto::action_constraint::Data::Eq(
+                    proto::action_constraint::EqMessage {
+                        euid: Some(proto::EntityUid::from(euid.as_ref())),
+                    },
+                )),
+            },
+        }
+    }
+}
+
 impl std::fmt::Display for StaticPolicy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (k, v) in self.0.annotations.iter() {
@@ -1757,6 +2135,26 @@ impl std::fmt::Display for Effect {
         match self {
             Self::Permit => write!(f, "permit"),
             Self::Forbid => write!(f, "forbid"),
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::Effect> for Effect {
+    fn from(v: &proto::Effect) -> Self {
+        match v {
+            proto::Effect::Forbid => Effect::Forbid,
+            proto::Effect::Permit => Effect::Permit,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Effect> for proto::Effect {
+    fn from(v: &Effect) -> Self {
+        match v {
+            Effect::Permit => proto::Effect::Permit,
+            Effect::Forbid => proto::Effect::Forbid,
         }
     }
 }

@@ -51,6 +51,25 @@ impl EntityType {
     }
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&proto::EntityType> for EntityType {
+    fn from(v: &proto::EntityType) -> Self {
+        Self::Specified(Name::from(v.name.as_ref().unwrap()))
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&EntityType> for proto::EntityType {
+    fn from(v: &EntityType) -> Self {
+        match v {
+            EntityType::Specified(n) => Self {
+                name: Some(proto::Name::from(n)),
+            },
+            EntityType::Unspecified => panic!("Protobuffer interface requires specified entities"),
+        }
+    }
+}
+
 // Note: the characters '<' and '>' are not allowed in `Name`s, so the display for
 // `Unspecified` never conflicts with `Specified(name)`.
 impl std::fmt::Display for EntityType {
@@ -223,6 +242,31 @@ impl<'a> arbitrary::Arbitrary<'a> for EntityUID {
             eid: u.arbitrary()?,
             loc: None,
         })
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::EntityUid> for EntityUID {
+    fn from(v: &proto::EntityUid) -> Self {
+        let loc: Option<Loc> = v.loc.as_ref().map(Loc::from);
+        Self {
+            ty: EntityType::from(v.ty.as_ref().unwrap()),
+            eid: Eid::new(v.eid.clone()),
+            loc: loc,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&EntityUID> for proto::EntityUid {
+    fn from(v: &EntityUID) -> Self {
+        let loc: Option<proto::Loc> = v.loc.as_ref().map(proto::Loc::from);
+        let eid_ref: &str = v.eid.as_ref();
+        Self {
+            ty: Some(proto::EntityType::from(&v.ty)),
+            eid: eid_ref.to_owned(),
+            loc: loc,
+        }
     }
 }
 
@@ -484,6 +528,57 @@ impl std::fmt::Display for Entity {
                 .join("; "),
             self.ancestors.iter().join(", ")
         )
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::Entity> for Entity {
+    fn from(v: &proto::Entity) -> Self {
+        let extensions_none = Extensions::none();
+        let eval = RestrictedEvaluator::new(&extensions_none);
+
+        let attrs: BTreeMap<SmolStr, PartialValueSerializedAsExpr> = v
+            .attrs
+            .iter()
+            .map(|(key, value)| {
+                let pval = eval
+                    .partial_interpret(BorrowedRestrictedExpr::new(&Expr::from(value)).unwrap())
+                    .unwrap();
+                (key.into(), pval.into())
+            })
+            .collect();
+
+        let ancestors: HashSet<EntityUID> = v.ancestors.iter().map(EntityUID::from).collect();
+
+        Self {
+            uid: EntityUID::from(v.uid.as_ref().unwrap()),
+            attrs: attrs,
+            ancestors: ancestors,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Entity> for proto::Entity {
+    fn from(v: &Entity) -> Self {
+        let mut attrs: HashMap<String, proto::Expr> = HashMap::with_capacity(v.attrs.len());
+        for (key, value) in &v.attrs {
+            attrs.insert(
+                key.to_string(),
+                proto::Expr::from(&Expr::from(PartialValue::from(value.to_owned()))),
+            );
+        }
+
+        let mut ancestors: Vec<proto::EntityUid> = Vec::with_capacity(v.ancestors.len());
+        for ancestor in &v.ancestors {
+            ancestors.push(proto::EntityUid::from(ancestor));
+        }
+
+        Self {
+            uid: Some(proto::EntityUid::from(&v.uid)),
+            attrs: attrs,
+            ancestors: ancestors,
+        }
     }
 }
 

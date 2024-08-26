@@ -20,6 +20,9 @@ use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::sync::Arc;
 
+#[cfg(feature = "protobuffers")]
+use crate::ast::proto;
+
 /// First-class values which may appear as literals in `Expr::Lit`.
 ///
 /// Note that the auto-derived `PartialEq` and `Eq` are total equality -- using
@@ -122,6 +125,40 @@ impl From<EntityUID> for Literal {
 impl From<Arc<EntityUID>> for Literal {
     fn from(ptr: Arc<EntityUID>) -> Self {
         Self::EntityUID(ptr)
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::expr::Literal> for Literal {
+    fn from(v: &proto::expr::Literal) -> Self {
+        match v.lit.as_ref().unwrap() {
+            proto::expr::literal::Lit::B(b) => Literal::Bool(b.clone()),
+            proto::expr::literal::Lit::I(l) => Literal::Long(l.clone()),
+            proto::expr::literal::Lit::S(s) => Literal::String(s.clone().into()),
+            proto::expr::literal::Lit::Euid(e) => Literal::EntityUID(EntityUID::from(e).into()),
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Literal> for proto::expr::Literal {
+    fn from(v: &Literal) -> Self {
+        match v {
+            Literal::Bool(b) => Self {
+                lit: Some(proto::expr::literal::Lit::B(b.clone())),
+            },
+            Literal::Long(l) => Self {
+                lit: Some(proto::expr::literal::Lit::I(l.clone())),
+            },
+            Literal::String(s) => Self {
+                lit: Some(proto::expr::literal::Lit::S(s.to_string())),
+            },
+            Literal::EntityUID(euid) => Self {
+                lit: Some(proto::expr::literal::Lit::Euid(proto::EntityUid::from(
+                    euid.as_ref(),
+                ))),
+            },
+        }
     }
 }
 

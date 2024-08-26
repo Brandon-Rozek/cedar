@@ -24,6 +24,9 @@ use smol_str::SmolStr;
 use std::sync::Arc;
 use thiserror::Error;
 
+#[cfg(feature = "protobuffers")]
+use crate::ast::proto;
+
 use super::{
     BorrowedRestrictedExpr, EntityUID, Expr, ExprConstructionError, ExprKind, PartialValue,
     PartialValueSerializedAsExpr, RestrictedExpr, Unknown, Value, ValueKind, Var,
@@ -93,6 +96,32 @@ impl EntityUIDEntry {
         match self {
             Self::Known { euid, .. } => Some(euid),
             Self::Unknown { .. } => None,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::EntityUidEntry> for EntityUIDEntry {
+    fn from(v: &proto::EntityUidEntry) -> Self {
+        let loc: Option<Loc> = v.loc.as_ref().map(Loc::from);
+        EntityUIDEntry::Known {
+            euid: EntityUID::from(v.euid.as_ref().unwrap()).into(),
+            loc: loc,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&EntityUIDEntry> for proto::EntityUidEntry {
+    fn from(v: &EntityUIDEntry) -> Self {
+        match v {
+            EntityUIDEntry::Unknown { loc: _ } => {
+                panic!("Unknown EntityUID is not currently supported by the Protobuf interface");
+            }
+            EntityUIDEntry::Known { euid, loc } => Self {
+                euid: Some(proto::EntityUid::from(euid.as_ref())),
+                loc: loc.as_ref().map(proto::Loc::from),
+            },
         }
     }
 }
@@ -202,6 +231,30 @@ impl std::fmt::Display for Request {
                 None => "unknown".to_string(),
             }
         )
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::Request> for Request {
+    fn from(v: &proto::Request) -> Self {
+        Request::new_unchecked(
+            EntityUIDEntry::from(v.principal.as_ref().unwrap()),
+            EntityUIDEntry::from(v.action.as_ref().unwrap()),
+            EntityUIDEntry::from(v.resource.as_ref().unwrap()),
+            v.context.as_ref().map(Context::from),
+        )
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Request> for proto::Request {
+    fn from(v: &Request) -> Self {
+        Self {
+            principal: Some(proto::EntityUidEntry::from(&v.principal)),
+            action: Some(proto::EntityUidEntry::from(&v.action)),
+            resource: Some(proto::EntityUidEntry::from(&v.resource)),
+            context: v.context.as_ref().map(proto::Context::from),
+        }
     }
 }
 
@@ -359,6 +412,28 @@ impl std::default::Default for Context {
 impl std::fmt::Display for Context {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.context)
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::Context> for Context {
+    fn from(v: &proto::Context) -> Self {
+        Context::from_expr(
+            BorrowedRestrictedExpr::new(&Expr::from(v.context.as_ref().unwrap())).unwrap(),
+            Extensions::none(),
+        )
+        .unwrap()
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Context> for proto::Context {
+    fn from(v: &Context) -> Self {
+        Self {
+            context: Some(proto::Expr::from(&Expr::from(PartialValue::from(
+                v.context.as_ref().to_owned(),
+            )))),
+        }
     }
 }
 

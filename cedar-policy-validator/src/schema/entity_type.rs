@@ -27,6 +27,12 @@ use cedar_policy_core::{
 
 use crate::types::{AttributeType, Attributes, OpenTag};
 
+#[cfg(feature = "protobuffers")]
+use crate::proto;
+
+#[cfg(feature = "protobuffers")]
+use cedar_policy_core::ast;
+
 /// Contains entity type information for use by the validator. The contents of
 /// the struct are the same as the schema entity type structure, but the
 /// `member_of` relation is reversed to instead be `descendants`.
@@ -92,5 +98,29 @@ impl TCNode<Name> for ValidatorEntityType {
 
     fn has_edge_to(&self, e: &Name) -> bool {
         self.descendants.contains(e)
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&ValidatorEntityType> for proto::ValidatorEntityType {
+    fn from(v: &ValidatorEntityType) -> Self {
+        Self {
+            name: Some(ast::proto::Name::from(&v.name)),
+            descendants: v.descendants.iter().map(ast::proto::Name::from).collect(),
+            attributes: Some(proto::Attributes::from(&v.attributes)),
+            open_attributes: proto::OpenTag::from(&v.open_attributes).into(),
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::ValidatorEntityType> for ValidatorEntityType {
+    fn from(v: &proto::ValidatorEntityType) -> Self {
+        Self {
+            name: ast::Name::from(v.name.as_ref().unwrap()),
+            descendants: v.descendants.iter().map(ast::Name::from).collect(),
+            attributes: Attributes::from(v.attributes.as_ref().unwrap()),
+            open_attributes: OpenTag::from(&proto::OpenTag::try_from(v.open_attributes).unwrap()),
+        }
     }
 }

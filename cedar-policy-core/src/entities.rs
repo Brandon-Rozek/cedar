@@ -345,6 +345,39 @@ impl std::fmt::Display for Entities {
     }
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&proto::Entities> for Entities {
+    fn from(v: &proto::Entities) -> Self {
+        let entities: Vec<Entity> = v.entities.iter().map(Entity::from).collect();
+
+        let result = Entities::new();
+
+        result
+            .add_entities(
+                entities,
+                None::<&NoEntitiesSchema>,
+                TCComputation::AssumeAlreadyComputed,
+                Extensions::none(),
+            )
+            .unwrap()
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Entities> for proto::Entities {
+    fn from(v: &Entities) -> Self {
+        let mut entities: Vec<proto::Entity> = Vec::with_capacity(v.entities.len());
+        for entity in v.entities.values() {
+            entities.push(proto::Entity::from(entity));
+        }
+
+        Self {
+            entities: entities,
+            mode: proto::Mode::Concrete.into(),
+        }
+    }
+}
+
 /// Results from dereferencing values from the Entity Store
 #[derive(Debug, Clone)]
 pub enum Dereference<'a, T> {

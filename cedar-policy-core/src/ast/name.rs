@@ -24,6 +24,9 @@ use crate::parser::err::ParseErrors;
 use crate::parser::Loc;
 use crate::FromNormalizedStr;
 
+#[cfg(feature = "protobuffers")]
+use crate::ast::proto;
+
 use super::PrincipalOrResource;
 
 /// This is the `Name` type used to name types, functions, etc.
@@ -257,6 +260,36 @@ impl<'a> arbitrary::Arbitrary<'a> for Name {
     }
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&proto::Name> for Name {
+    fn from(v: &proto::Name) -> Self {
+        let loc: Option<Loc> = v.loc.as_ref().map(Loc::from);
+        let path: Arc<Vec<Id>> = Arc::new(v.path.iter().map(Id::new_unchecked).collect());
+
+        Self {
+            id: Id::new_unchecked(&v.id),
+            path: path,
+            loc: loc,
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&Name> for proto::Name {
+    fn from(v: &Name) -> Self {
+        let mut path: Vec<String> = Vec::with_capacity(v.path.as_ref().len());
+        for value in v.path.as_ref() {
+            path.push(String::from(value.as_ref()));
+        }
+
+        Self {
+            id: String::from(v.id.as_ref()),
+            path: path,
+            loc: v.loc.as_ref().map(proto::Loc::from),
+        }
+    }
+}
+
 /// Identifier for a slot
 /// Clone is O(1).
 // This simply wraps a separate enum -- currently `ValidSlotId` -- in case we
@@ -344,6 +377,26 @@ impl std::hash::Hash for Slot {
         // hash only the id, in line with the `PartialEq` impl which compares
         // only the id
         self.id.hash(state);
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::SlotId> for SlotId {
+    fn from(v: &proto::SlotId) -> Self {
+        match v {
+            proto::SlotId::Principal => SlotId::principal(),
+            proto::SlotId::Resource => SlotId::resource(),
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&SlotId> for proto::SlotId {
+    fn from(v: &SlotId) -> Self {
+        match v {
+            SlotId(ValidSlotId::Principal) => proto::SlotId::Principal,
+            SlotId(ValidSlotId::Resource) => proto::SlotId::Resource,
+        }
     }
 }
 

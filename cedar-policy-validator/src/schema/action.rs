@@ -26,6 +26,12 @@ use std::collections::{BTreeMap, HashSet};
 
 use crate::types::{Attributes, Type};
 
+#[cfg(feature = "protobuffers")]
+use crate::proto;
+
+#[cfg(feature = "protobuffers")]
+use cedar_policy_core::{ast, evaluator::RestrictedEvaluator, extensions::Extensions};
+
 /// Contains information about actions used by the validator.  The contents of
 /// the struct are the same as the schema entity type structure, but the
 /// `member_of` relation is reversed to instead be `descendants`.
@@ -96,6 +102,61 @@ impl TCNode<EntityUID> for ValidatorActionId {
     }
 }
 
+#[cfg(feature = "protobuffers")]
+impl From<&ValidatorActionId> for proto::ValidatorActionId {
+    fn from(v: &ValidatorActionId) -> Self {
+        Self {
+            name: Some(ast::proto::EntityUid::from(&v.name)),
+            applies_to: Some(proto::ValidatorApplySpec::from(&v.applies_to)),
+            descendants: v
+                .descendants
+                .iter()
+                .map(ast::proto::EntityUid::from)
+                .collect(),
+            context: Some(proto::Type::from(&v.context)),
+            attribute_types: Some(proto::Attributes::from(&v.attribute_types)),
+            attributes: v
+                .attributes
+                .iter()
+                .map(|(s, v)| {
+                    let key = s.to_string();
+                    let value = ast::proto::Expr::from(&ast::Expr::from(ast::PartialValue::from(
+                        v.to_owned(),
+                    )));
+                    (key, value)
+                })
+                .collect(),
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::ValidatorActionId> for ValidatorActionId {
+    fn from(v: &proto::ValidatorActionId) -> Self {
+        let extensions_none = Extensions::none();
+        let eval = RestrictedEvaluator::new(&extensions_none);
+        Self {
+            name: ast::EntityUID::from(v.name.as_ref().unwrap()),
+            applies_to: ValidatorApplySpec::from(v.applies_to.as_ref().unwrap()),
+            descendants: v.descendants.iter().map(ast::EntityUID::from).collect(),
+            context: Type::from(v.context.as_ref().unwrap()),
+            attribute_types: Attributes::from(v.attribute_types.as_ref().unwrap()),
+            attributes: v
+                .attributes
+                .iter()
+                .map(|(k, v)| {
+                    let pval = eval
+                        .partial_interpret(
+                            ast::BorrowedRestrictedExpr::new(&ast::Expr::from(v)).unwrap(),
+                        )
+                        .unwrap();
+                    (k.into(), pval.into())
+                })
+                .collect(),
+        }
+    }
+}
+
 /// The principals and resources that an action can be applied to.
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct ValidatorApplySpec {
@@ -145,5 +206,41 @@ impl ValidatorApplySpec {
     /// Get the applicable resource types for this spec.
     pub fn applicable_resource_types(&self) -> impl Iterator<Item = &EntityType> {
         self.resource_apply_spec.iter()
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&ValidatorApplySpec> for proto::ValidatorApplySpec {
+    fn from(v: &ValidatorApplySpec) -> Self {
+        Self {
+            principal_apply_spec: v
+                .principal_apply_spec
+                .iter()
+                .map(ast::proto::EntityType::from)
+                .collect(),
+            resource_apply_spec: v
+                .resource_apply_spec
+                .iter()
+                .map(ast::proto::EntityType::from)
+                .collect(),
+        }
+    }
+}
+
+#[cfg(feature = "protobuffers")]
+impl From<&proto::ValidatorApplySpec> for ValidatorApplySpec {
+    fn from(v: &proto::ValidatorApplySpec) -> Self {
+        Self {
+            principal_apply_spec: v
+                .principal_apply_spec
+                .iter()
+                .map(ast::EntityType::from)
+                .collect(),
+            resource_apply_spec: v
+                .resource_apply_spec
+                .iter()
+                .map(ast::EntityType::from)
+                .collect(),
+        }
     }
 }
